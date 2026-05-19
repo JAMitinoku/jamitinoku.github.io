@@ -31,6 +31,31 @@
         <label>入力:</label>
         <select id="mic-select"><option>読み込み中...</option></select>
     </div>
+    <div class="tool-group">
+        <label>感度:</label>
+        <select id="boost-select">
+            <option value="1.0">1.0</option>
+            <option value="2.0">2.0</option>
+            <option value="3.0">3.0</option>
+            <option value="4.0">4.0</option>
+            <option value="5.0" selected>5.0</option>
+            <option value="6.0">6.0</option>
+            <option value="7.0">7.0</option>
+            <option value="8.0">8.0</option>
+            <option value="9.0">9.0</option>
+            <option value="10.0">10.0</option>
+            <option value="11.0">11.0</option>
+            <option value="12.0">12.0</option>
+            <option value="13.0">13.0</option>
+            <option value="14.0">14.0</option>
+            <option value="15.0">15.0</option>
+            <option value="16.0">16.0</option>
+            <option value="17.0">17.0</option>
+            <option value="18.0">18.0</option>
+            <option value="19.0">19.0</option>
+            <option value="20.0">20.0</option>
+        </select>
+    </div>
     <div class="filter-toggle">
         <input type="checkbox" id="bgm-filter" checked>
         <label for="bgm-filter">ノイズ除去</label>
@@ -62,12 +87,12 @@
     let isRunning = false;
     let stream = null;
     let restartTimeoutId = null;
+    let multiplier = 5.0; // 初期値を5.0に設定
 
     function resetPermissions() { window.location.reload(); }
 
     async function init() {
         try {
-            // 初期アクセス権確認
             const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
             temp.getTracks().forEach(t => t.stop());
             await refreshDevices();
@@ -119,7 +144,6 @@
         });
     }
 
-    // 【変更点①】SpeechRecognitionインスタンスの生成と初期化を完全に分離
     function createRecognitionInstance() {
         const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!Speech) {
@@ -157,14 +181,12 @@
         rec.onend = () => {
             if (isRunning) {
                 clearTimeout(restartTimeoutId);
-                // Androidの急速な切断・再接続の競合を避ける安全なマージン
                 restartTimeoutId = setTimeout(() => {
                     if (isRunning && recognition) {
                         try { 
                             recognition.start(); 
                         } catch(err) { 
                             console.warn("再起動セーフティ発動:", err);
-                            // インスタンスがロックされた場合は、ユーザーインタラクション外でも再生成して即時復活させる
                             if (isRunning) {
                                 recognition = createRecognitionInstance();
                                 if (recognition) recognition.start();
@@ -176,7 +198,6 @@
         };
 
         rec.onerror = (ev) => {
-            // no-speechやabortedはスマホで高頻度で発生する正常なライフサイクルの一部。エラー扱いにしない
             if (ev.error === 'network') {
                 document.getElementById('engine-status').innerText = "NET ERROR";
             }
@@ -205,19 +226,19 @@
         }
     }
 
-    // 【変更点②】クリックイベントから直接（同期処理で）start()を呼び出すロジックに大改造
     document.getElementById('btn-start').onclick = function() {
         try {
             document.getElementById('btn-start').disabled = true;
             document.getElementById('engine-status').innerText = "CONNECTING";
             isRunning = true;
             
-            // 1. スマホのセキュリティを突破するため、クリックされたこの瞬間に最優先でインスタンス化して起動！
+            // 開始時に選択されているブースト値を取得
+            multiplier = parseFloat(document.getElementById('boost-select').value);
+            
             recognition = createRecognitionInstance();
             if (!recognition) return;
             recognition.start();
 
-            // 2. 音声認識が「走り始めたあと」に、バックグラウンドでマイクストリームの初期化やデバイス更新を行う（非同期）
             const deviceId = document.getElementById('mic-select').value;
             const filterActive = document.getElementById('bgm-filter').checked;
             const constraints = {
@@ -235,7 +256,6 @@
                 document.getElementById('btn-stop').disabled = false;
             }).catch(err => {
                 console.error("マイクストリーム取得失敗:", err);
-                // マイクストリームが取れなくても、Web Speech API単体で動くスマホが多いため、あえて即時停止せず継続させる
             });
 
         } catch (err) {
@@ -255,12 +275,15 @@
         document.getElementById('active-line').innerText = "停止中";
     };
 
+    document.getElementById('boost-select').onchange = () => {
+        multiplier = parseFloat(document.getElementById('boost-select').value);
+    };
+
     document.getElementById('mic-select').onchange = async () => {
         if (isRunning) {
             document.getElementById('engine-status').innerText = "RECONNECTING";
             await stopMedia();
             isRunning = true;
-            // 変更時の擬似クリック発火
             document.getElementById('btn-start').click();
         }
     };
