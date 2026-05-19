@@ -27,7 +27,7 @@ const cmsData = {
       category: "総務",
       title: "簡易文字起こしツール",
       content: "Googleの文字認識サーバ利用の文字起こしツール。Chrome推奨",
-      url: "https://jamitinoku.github.io/transcribe.html" // ← リンク先を指定
+      url: "https://jamitinoku.github.io/transcribex.html" // ← リンク先を指定
     }
   ]
 };
