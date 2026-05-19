@@ -2,216 +2,283 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録（完全フリーズ対策版）</title>
+    <title>逐語録 Pro - Zero Drop (安定・モバイル対応版)</title>
     <style>
-        :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --warning: #ffc107; --secondary: #6c757d; --info: #17a2b8; }
+        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+        .tool-group { display: flex; align-items: center; gap: 5px; }
+        label { font-size: 11px; color: #8b949e; }
+        button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
+        #btn-stop { background: var(--danger); color: white; border: none; }
+        .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 5px 10px; border-radius: 20px; border: 1px solid #444; }
         
-        body { 
-            font-family: 'Helvetica Neue', Arial, sans-serif; 
-            padding: 10px; 
-            background: #f4f7f9; 
-            margin: 0; 
-            color: #333;
-            box-sizing: border-box;
-            display: flex;
-            justify-content: center;
-        }
-
-        .card { 
-            background: #fff; 
-            padding: 20px; 
-            border-radius: 15px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-            width: 100%;
-            max-width: 100%; 
-            box-sizing: border-box;
-        }
-
-        h2 { margin: 0 0 15px; font-size: 1.2em; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        #log-screen { flex: 1; padding: 20px 30px; overflow-y: auto; font-size: 18px; line-height: 1.6; border-bottom: 1px solid var(--border); }
+        #interim-area { padding: 15px 30px; min-height: 3em; background: #0d1117; font-size: 18px; line-height: 1.6; }
         
-        .conn-status { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 15px; font-weight: bold; font-size: 0.9em; }
-        .indicator { width: 12px; height: 12px; border-radius: 50%; background: #ccc; }
-        .online { background: var(--success); box-shadow: 0 0 8px var(--success); }
-        .connecting { background: var(--warning); animation: blink 1s infinite; }
-        .error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
-        @keyframes blink { 50% { opacity: 0.5; } }
-
-        .controls { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
-        
-        button { 
-            flex: 1; 
-            min-width: 70px; 
-            padding: 12px 8px; 
-            font-size: 14px; 
-            font-weight: bold; 
-            cursor: pointer; 
-            border: none; 
-            border-radius: 8px; 
-            transition: 0.2s; 
-            color: white; 
-            white-space: nowrap;
-        }
-        #start { background: var(--primary); flex: 1.5; }
-        #stop { background: var(--danger); flex: 1.5; }
-        #copy { background: var(--info); }
-        #save { background: var(--success); }
-        #clear { background: var(--secondary); }
-        button:disabled { background: #ccc !important; cursor: not-allowed; opacity: 0.6; }
-
-        .status-area { font-size: 0.85em; text-align: center; margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 6px; color: #856404; min-height: 1.2em; word-break: break-all; }
-        
-        #output-box { 
-            width: 100%; 
-            height: calc(100vh - 240px); 
-            min-height: 300px;
-            padding: 15px; 
-            border-radius: 12px; 
-            border: 1px solid #eef; 
-            background: #fdfdfd; 
-            overflow-y: auto; 
-            line-height: 1.8; 
-            font-size: 16px; 
-            box-sizing: border-box; 
-        }
-        
-        /* コピー時の選択表示を確実にするため、非表示ではなく透明なテキストエリアとして配置 */
-        #dummy-textarea {
-            position: absolute;
-            left: -9999px;
-            opacity: 0;
-        }
-
-        #final-span { color: #222; white-space: pre-wrap; }
-        #interim-span { color: #999; font-style: italic; }
-
-        @media (max-width: 480px) {
-            body { padding: 5px; }
-            .card { padding: 15px; border-radius: 0; }
-            button { font-size: 13px; padding: 10px 4px; }
-            #output-box { height: calc(100vh - 220px); }
-        }
+        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; }
+        .interim { color: #8b949e; font-style: italic; }
+        .monitor { background: #010409; padding: 8px 20px; border-top: 1px solid var(--border); }
+        #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>逐語録（高速・超安定版）</h2>
-    
-    <div class="conn-status">
-        <div id="indicator" class="indicator"></div>
-        <span id="conn-text">音声認識：待機中</span>
+<div class="toolbar">
+    <div class="tool-group">
+        <label>入力:</label>
+        <select id="mic-select"><option>読み込み中...</option></select>
     </div>
-
-    <div class="controls">
-        <button id="start">認識開始</button>
-        <button id="stop" disabled>停止</button>
-        <button id="copy">コピー</button>
-        <button id="save">保存</button>
-        <button id="clear">クリア</button>
+    <div class="filter-toggle">
+        <input type="checkbox" id="bgm-filter" checked>
+        <label for="bgm-filter">ノイズ除去</label>
     </div>
+    <button id="btn-start" disabled>開始</button>
+    <button id="btn-stop" disabled>停止</button>
+    <div style="margin-left: auto; display: flex; gap: 8px;">
+        <button onclick="resetPermissions()">権限リセット</button>
+        <button onclick="copyAll()">コピー</button>
+        <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
+    </div>
+</div>
 
-    <div class="status-area" id="status-display">「認識開始」を押してください。</div>
-    <div id="output-box"><span id="final-span"></span><span id="interim-span"></span></div>
-    <textarea id="dummy-textarea" readonly></textarea>
+<div id="log-screen"></div>
+
+<div id="interim-area">
+    <div id="active-line" class="block interim">ここに認識結果が表示されます...</div>
+</div>
+
+<div class="monitor">
+    <div id="status-bar">
+        <span id="engine-status">READY</span>
+        <span id="mode-status" style="color: var(--accent);">MOBILE OPTIMIZED</span>
+    </div>
 </div>
 
 <script>
-    const startBtn = document.getElementById('start');
-    const stopBtn = document.getElementById('stop');
-    const copyBtn = document.getElementById('copy');
-    const saveBtn = document.getElementById('save');
-    const clearBtn = document.getElementById('clear');
-    const finalSpan = document.getElementById('final-span');
-    const interimSpan = document.getElementById('interim-span');
-    const outputBox = document.getElementById('output-box');
-    const statusDisp = document.getElementById('status-display');
-    const indicator = document.getElementById('indicator');
-    const connText = document.getElementById('conn-text');
-    const dummyTextarea = document.getElementById('dummy-textarea');
-
     let recognition = null;
-    let isActive = false;
-    let restartTimer = null;
-    
-    let finalParagraphs = [];
-    let confirmedSet = new Set();
-    let processedIndices = new Set();
-    let lastConfirmedText = "";
+    let isRunning = false;
+    let stream = null;
+    let restartTimeoutId = null;
 
-    function updateStatus(type, msg) {
-        statusDisp.innerText = msg;
-        indicator.className = "indicator " + type;
-        if(type === 'online') { 
-            connText.innerText = "音声認識：稼働中"; 
-            statusDisp.style.background = "#d4edda"; 
-            statusDisp.style.color = "#155724";
-        } else if(type === 'error') { 
-            connText.innerText = "音声認識：エラー停止"; 
-            statusDisp.style.background = "#f8d7da"; 
-            statusDisp.style.color = "#721c24";
-        } else if(type === 'connecting') {
-            connText.innerText = "音声認識 : 起動処理中..."; 
-            statusDisp.style.background = "#fff3cd"; 
-            statusDisp.style.color = "#856404";
-        } else { 
-            connText.innerText = "音声認識：停止中"; 
-            statusDisp.style.background = "#f8f9fa"; 
-            statusDisp.style.color = "#333";
+    function resetPermissions() { window.location.reload(); }
+
+    async function init() {
+        try {
+            const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
+            temp.getTracks().forEach(t => t.stop());
+            await refreshDevices();
+            document.getElementById('btn-start').disabled = false;
+        } catch (e) { 
+            document.getElementById('engine-status').innerText = "MIC ERROR"; 
         }
     }
 
-    function startSpeechEngine() {
-        if (!isActive) return;
-
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            updateStatus('error', "エラー: お使いのブラウザは音声認識非対応です。");
-            return;
-        }
-
+    async function refreshDevices() {
+        const sel = document.getElementById('mic-select');
         try {
-            recognition = new SpeechRecognition();
-            recognition.lang = 'ja-JP';
-            recognition.interimResults = true;
-            recognition.continuous = true; 
+            const devs = await navigator.mediaDevices.enumerateDevices();
+            const currentVal = sel.value;
+            sel.innerHTML = '';
+            devs.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || `Mic ${i + 1}`;
+                sel.appendChild(opt);
+            });
+            if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+                sel.value = currentVal;
+            }
+        } catch(e) { console.error(e); }
+    }
 
-            recognition.onstart = () => {
-                updateStatus('online', "音声を認識しています。お話しください。");
-            };
+    function addFinalBlock(text) {
+        let cleanedText = text.trim();
+        if (!cleanedText) return;
 
-            recognition.onresult = (e) => {
-                if (!isActive) return;
-                let interimText = '';
-                let hasNewFinal = false;
+        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
+        cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
+        if (cleanedText === "") return;
 
-                for (let i = e.resultIndex; i < e.results.length; i++) {
-                    let result = e.results[i];
-                    let transcript = result[0].transcript;
+        const screen = document.getElementById('log-screen');
+        
+        if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
 
-                    if (!transcript) continue;
-                    
-                    const cleanText = transcript.replace(/[\s。、]/g, "");
+        const newBlock = document.createElement('div');
+        newBlock.className = 'block';
 
-                    if (result.isFinal) {
-                        if (processedIndices.has(i)) continue;
-                        processedIndices.add(i);
-                        if (confirmedSet.has(cleanText)) continue;
+        const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
+        newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
+        
+        screen.appendChild(newBlock);
 
-                        if (lastConfirmedText && transcript.startsWith(lastConfirmedText) && transcript !== lastConfirmedText) {
-                            transcript = transcript.substring(lastConfirmedText.length);
+        requestAnimationFrame(() => {
+            screen.scrollTop = screen.scrollHeight;
+        });
+    }
+
+    function setupRecognition() {
+        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Speech) return null;
+
+        const rec = new Speech();
+        rec.lang = 'ja-JP';
+        rec.continuous = true;
+        rec.interimResults = true;
+
+        rec.onstart = () => {
+            document.getElementById('engine-status').innerText = "LIVE";
+        };
+
+        rec.onresult = (e) => {
+            const activeLine = document.getElementById('active-line');
+            let interimStr = "";
+
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) {
+                    addFinalBlock(e.results[i][0].transcript);
+                } else {
+                    interimStr += e.results[i][0].transcript;
+                }
+            }
+            
+            const nextText = interimStr || "...";
+            if (activeLine.innerText !== nextText) {
+                activeLine.innerText = nextText;
+            }
+        };
+
+        // Android/Mobile向けの強力な再起動セーフティ
+        rec.onend = () => {
+            if (isRunning) {
+                clearTimeout(restartTimeoutId);
+                // Android Chrome特有の切断に対応するため、少し余裕を持たせた400msで安全に再帰スタート
+                restartTimeoutId = setTimeout(() => {
+                    if (isRunning && recognition) {
+                        try { 
+                            recognition.start(); 
+                        } catch(err) { 
+                            // 既に動いているエラー(aborted等)が出た場合は、一度破棄して再生成を試みる
+                            console.warn("再起動セーフティ作動:", err);
+                            if (isRunning) {
+                                try { recognition.abort(); } catch(e){}
+                                setupRecognition();
+                                if (recognition) recognition.start();
+                            }
                         }
+                    }
+                }, 400);
+            }
+        };
 
-                        let cleanedText = transcript.trim();
-                        if (cleanedText === "") continue;
+        rec.onerror = (ev) => {
+            // Android特有の頻発するエラー（no-speechやaborted）はユーザーに見せずバックグラウンドで処理
+            if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
+                console.warn("認識エラー:", ev.error);
+            }
+        };
 
-                        // 【常時自動削除】超高速フィラー削除フィルタ
-                        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-                        cleanedText = cleanedText.replace(fillerRegex, "")
-                                                 .replace(/[、\s]?(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)[、\s]?/g, " ")
-                                                 .trim();
-                        
-                        if (cleanedText === "") continue;
+        recognition = rec;
+        return rec;
+    }
 
-                        confirmedSet.add(cleanText);
-                        lastConfirmedText = result[0].transcript;
+    async function stopMedia() {
+        isRunning = false;
+        clearTimeout(restartTimeoutId);
+
+        if (recognition) {
+            recognition.onend = null;
+            recognition.onerror = null;
+            try { recognition.stop(); } catch(e){}
+            try { recognition.abort(); } catch(e){}
+            recognition = null;
+        }
+        if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); stream = null; }
+    }
+
+    async function startStream() {
+        const deviceId = document.getElementById('mic-select').value;
+        const filterActive = document.getElementById('bgm-filter').checked;
+
+        const constraints = {
+            audio: {
+                deviceId: deviceId ? { exact: deviceId } : undefined,
+                echoCancellation: true,
+                noiseSuppression: filterActive,
+                autoGainControl: true
+            }
+        };
+
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        await refreshDevices();
+
+        const rec = setupRecognition();
+        if (rec) rec.start();
+    }
+
+    document.getElementById('btn-start').onclick = async () => {
+        try {
+            document.getElementById('btn-start').disabled = true;
+            document.getElementById('engine-status').innerText = "CONNECTING";
+            isRunning = true;
+            
+            await startStream();
+            
+            document.getElementById('btn-stop').disabled = false;
+        } catch (err) {
+            console.error(err);
+            document.getElementById('engine-status').innerText = "ERROR";
+            document.getElementById('btn-start').disabled = false;
+            isRunning = false;
+        }
+    };
+
+    document.getElementById('btn-stop').onclick = async () => {
+        document.getElementById('btn-stop').disabled = true;
+        await stopMedia();
+        
+        document.getElementById('btn-start').disabled = false;
+        document.getElementById('engine-status').innerText = "STOPPED";
+        document.getElementById('active-line').innerText = "停止中";
+    };
+
+    document.getElementById('mic-select').onchange = async () => {
+        if (isRunning) {
+            document.getElementById('engine-status').innerText = "RECONNECTING";
+            await stopMedia();
+            isRunning = true;
+            await startStream();
+        }
+    };
+
+    document.getElementById('bgm-filter').onchange = async () => {
+        if (isRunning) {
+            document.getElementById('engine-status').innerText = "FILTERING";
+            await stopMedia();
+            isRunning = true;
+            await startStream();
+        }
+    };
+
+    function clearAll() { 
+        if(!confirm("ログを削除しますか？")) return;
+        document.getElementById('log-screen').innerHTML = ''; 
+        document.getElementById('active-line').innerText = "...";
+    }
+    
+    function copyAll() {
+        const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n');
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = document.getElementById('engine-status').innerText;
+            document.getElementById('engine-status').innerText = "COPIED!";
+            setTimeout(() => document.getElementById('engine-status').innerText = originalText, 1500);
+        });
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
