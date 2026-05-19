@@ -47,7 +47,7 @@
         <label>入力:</label>
         <select id="mic-select"><option value="default">既定のマイク</option></select>
     </div>
-    <div class="tool-group">
+    <div class="tool-group" style="display:none;">
         <label>感度:</label>
         <select id="boost-select"></select>
     </div>
@@ -70,7 +70,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">READY</span>
-        <span id="mode-status" style="color: var(--accent);">ZERO-DROP OPTIMIZED</span>
+        <span id="mode-status" style="color: var(--accent);">ANDROID-OPTIMIZED</span>
     </div>
 </div>
 
@@ -78,9 +78,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 15.0;
-
-    // 【Android対策】直近の確定テキストを保持する変数
+    let multiplier = 1.0;
     let lastFinalText = "";
 
     function resetPermissions() { 
@@ -95,17 +93,11 @@
         const firstOpt = document.createElement('option');
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
-
-        for (let i = 10; i <= 200; i += 10) {
-            const opt = document.createElement('option');
-            opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 50) opt.selected = true;
-            boostSelect.appendChild(opt);
-        }
     }
 
     async function updateMicList() {
         try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
             const devs = await navigator.mediaDevices.enumerateDevices();
             const sel = document.getElementById('mic-select');
             const currentVal = sel.value;
@@ -145,11 +137,11 @@
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.interimResults = true;
+        // continuousはAndroidで無視されやすいが、一応trueに設定
         recognition.continuous = true;
 
         recognition.onstart = async () => {
             document.getElementById('engine-status').innerText = "LIVE";
-            await updateMicList();
         };
 
         recognition.onresult = (e) => {
@@ -181,26 +173,25 @@
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
+                // Androidのブツ切り対策：認識が切れたら即座に再起動をかける
                 restartTimeoutId = setTimeout(() => {
                     if (isActive && recognition) {
                         try { 
                             recognition.start(); 
                         } catch(e) {
-                            console.warn("エンジンロック検知、強制覚醒実行");
                             forceResetEngine();
                         }
                     }
-                }, 20); 
+                }, 50); 
             }
         };
 
         recognition.onerror = (ev) => {
             console.warn("認識エラーハンドリング:", ev.error);
             if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
-                try { recognition.stop(); } catch(e){}
+                // 何も話していない時のタイムアウト等はスルーして再起動を待つ
             } else if (ev.error === 'not-allowed') {
                 document.getElementById('engine-status').innerText = "マイク許可なし";
-                alert("マイクの使用が許可されていません。");
             }
         };
     }
@@ -216,16 +207,23 @@
         }
     }
 
-    // 【新ロジック】二つのテキストの重複部分を計算してマージする関数
+    // Androidの重複バッファ対策を緩和
     function mergeOverlap(prev, next) {
         if (!prev) return next;
-        if (prev === next || prev.includes(next)) return ""; // 完全重複、または過去に含まれているなら追加不要
+        if (prev === next) return ""; 
         
-        // 新しいテキストが過去のテキストの末尾から始まっているか、重なりを探す
+        // Android特有の、直前の確定文字が含まれているかどうかの簡易チェック
+        if (prev.length > 4 && next.length > 4) {
+            if (prev.includes(next) || next.includes(prev)) {
+                // 完全に内包されている場合は、短い方を無視、または差分だけにする
+                if (prev.endsWith(next)) return "";
+            }
+        }
+
         let maxLength = Math.min(prev.length, next.length);
         for (let len = maxLength; len > 0; len--) {
             if (prev.endsWith(next.substring(0, len))) {
-                return next.substring(len); // 重複部分を切り取って返す
+                return next.substring(len); 
             }
         }
         return next;
@@ -239,15 +237,11 @@
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
 
-        // 【Android文字落ち・多重対策コア】
-        // 直前テキストと今回入ってきたテキストの「重なり」を計算し、重複部分を削り落とす
         let uniqueText = mergeOverlap(lastFinalText, cleanedText);
         uniqueText = uniqueText.trim();
         
-        // 重複を引いた結果、中身が空っぽになった場合は完全に重複なので処理をスキップ
         if (!uniqueText) return;
 
-        // 過去の記憶を更新（ノイズ除去用に、今回入った生テキストを保存しておく）
         lastFinalText = cleanedText;
 
         const screen = document.getElementById('log-screen');
@@ -289,13 +283,7 @@
         document.getElementById('btn-stop').disabled = false;
         document.getElementById('engine-status').innerText = "CONNECTING";
 
-        try {
-            const filterActive = document.getElementById('bgm-filter').checked;
-            const streamTrigger = await navigator.mediaDevices.getUserMedia({ 
-                audio: { noiseSuppression: filterActive } 
-            });
-            streamTrigger.getTracks().forEach(t => t.stop());
-        } catch (e) { console.warn("権限プリチェック・スキップ", e); }
+        // Androidでのオーディオ競合を防ぐため、開始前の重複したgetUserMediaを削除
 
         if (!recognition) {
             initRecognition();
@@ -303,10 +291,8 @@
 
         if (recognition) {
             try {
-                multiplier = parseFloat(document.getElementById('boost-select').value);
                 recognition.start();
             } catch (e) {
-                console.error(e);
                 forceResetEngine();
             }
         }
@@ -359,14 +345,10 @@
         }
     };
 
-    document.getElementById('boost-select').onchange = () => {
-        multiplier = parseFloat(document.getElementById('boost-select').value);
-    };
-
     function clearAll() { 
         if(!confirm("ログを削除しますか？")) return;
         document.getElementById('log-screen').innerHTML = ''; 
-        lastFinalText = ""; // 記憶バッファも完全にクリア
+        lastFinalText = ""; 
     }
     
     function copyAll() {
