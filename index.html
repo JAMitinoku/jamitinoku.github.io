@@ -8,10 +8,12 @@
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
         
+        /* スマホでも折り返して綺麗に配置されるツールバー */
         .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
         .tool-group { display: flex; align-items: center; gap: 5px; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
         
+        /* スマホで誤タップを防ぐための程よいサイズと余白 */
         button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
@@ -19,6 +21,7 @@
         
         .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 6px 10px; border-radius: 20px; border: 1px solid #444; }
         
+        /* 右側の操作ボタン群をスマホの横幅に合わせて最適化 */
         .action-group { margin-left: auto; display: flex; gap: 8px; }
         @media (max-width: 480px) {
             .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
@@ -39,7 +42,7 @@
 <div class="toolbar">
     <div class="tool-group">
         <label>入力:</label>
-        <select id="mic-select"><option>読み込み中...</option></select>
+        <select id="mic-select"><option value="default">既定のマイク</option></select>
     </div>
     <div class="tool-group">
         <label>感度:</label>
@@ -50,7 +53,7 @@
         <input type="checkbox" id="bgm-filter" checked>
         <label for="bgm-filter">ノイズ除去</label>
     </div>
-    <button id="btn-start" disabled>開始</button>
+    <button id="btn-start">開始</button>
     <button id="btn-stop" disabled>停止</button>
     <div class="action-group">
         <button onclick="resetPermissions()">権限リセット</button>
@@ -81,58 +84,28 @@
 
     function resetPermissions() { window.location.reload(); }
 
-    // 感度の選択肢を「1」および「5から50まで5刻み」で自動生成する関数
+    // 1〜50（5刻み、初期値5）のセレクトボックス生成
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
         
-        // 最初の選択肢として「1.0」を追加
         const firstOpt = document.createElement('option');
-        firstOpt.value = "1.0";
-        firstOpt.text = "1.0";
+        firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
 
-        // 5から50まで5刻みで追加（5, 10, 15, ..., 50）
         for (let i = 5; i <= 50; i += 5) {
             const opt = document.createElement('option');
-            opt.value = i.toFixed(1);
-            opt.text = i.toFixed(1);
-            if (i === 5) {
-                opt.selected = true; // 初期値を5.0に設定
-            }
+            opt.value = i.toFixed(1); opt.text = i.toFixed(1);
+            if (i === 5) opt.selected = true;
             boostSelect.appendChild(opt);
         }
     }
 
-    async function init() {
-        initBoostSelect(); // 感度セレクトボックスの初期化
-        try {
-            const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
-            temp.getTracks().forEach(t => t.stop());
-            await refreshDevices();
-            document.getElementById('btn-start').disabled = false;
-        } catch (e) { 
-            document.getElementById('engine-status').innerText = "MIC ERROR"; 
-        }
-    }
-
-    async function refreshDevices() {
-        const sel = document.getElementById('mic-select');
-        try {
-            const devs = await navigator.mediaDevices.enumerateDevices();
-            const currentVal = sel.value;
-            sel.innerHTML = '';
-            devs.filter(d => d.kind === 'audioinput').forEach((d, i) => {
-                const opt = document.createElement('option');
-                opt.value = d.deviceId;
-                opt.text = d.label || `Mic ${i + 1}`;
-                sel.appendChild(opt);
-            });
-            if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
-                sel.value = currentVal;
-            }
-        } catch(e) { console.error(e); }
-    }
+    window.onload = function() {
+        initBoostSelect();
+        // スマホではロード時のマイク取得で全体がフリーズするのを防ぐため、最初から開始ボタンを解放
+        document.getElementById('btn-start').disabled = false;
+    };
 
     function addFinalBlock(text) {
         let cleanedText = text.trim();
@@ -152,15 +125,15 @@
         newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
         
         screen.appendChild(newBlock);
-
-        requestAnimationFrame(() => {
-            screen.scrollTop = screen.scrollHeight;
-        });
+        requestAnimationFrame(() => { screen.scrollTop = screen.scrollHeight; });
     }
 
     function createRecognitionInstance() {
         const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!Speech) return null;
+        if (!Speech) {
+            alert("音声認識に対応していないブラウザです。Chrome等をお試しください。");
+            return null;
+        }
 
         const rec = new Speech();
         rec.lang = 'ja-JP';
@@ -169,6 +142,7 @@
 
         rec.onstart = () => {
             document.getElementById('engine-status').innerText = "LIVE";
+            document.getElementById('btn-stop').disabled = false;
         };
 
         rec.onresult = (e) => {
@@ -182,27 +156,21 @@
                     interimStr += e.results[i][0].transcript;
                 }
             }
-            
             const nextText = interimStr || "...";
-            if (activeLine.innerText !== nextText) {
-                activeLine.innerText = nextText;
-            }
+            if (activeLine.innerText !== nextText) activeLine.innerText = nextText;
         };
 
         rec.onend = () => {
             if (isRunning) {
                 clearTimeout(restartTimeoutId);
                 restartTimeoutId = setTimeout(() => {
-                    if (isRunning && recognition) {
-                        try { 
-                            recognition.start(); 
-                        } catch(err) { 
-                            console.warn("再起動セーフティ発動:", err);
-                            if (isRunning) {
-                                try { recognition.abort(); } catch(e){}
-                                recognition = createRecognitionInstance();
-                                if (recognition) recognition.start();
-                            }
+                    if (isRunning) {
+                        try {
+                            // Android特有のストリーム固着対策：インスタンスを毎回破棄・再生成して完全復帰
+                            recognition = createRecognitionInstance();
+                            if (recognition) recognition.start();
+                        } catch(err) {
+                            console.warn("オートリスタート失敗回避:", err);
                         }
                     }
                 }, 350);
@@ -210,18 +178,73 @@
         };
 
         rec.onerror = (ev) => {
-            if (ev.error === 'network') {
+            if (ev.error === 'not-allowed') {
+                document.getElementById('engine-status').innerText = "マイク許可なし";
+                alert("マイクの使用許可が必要です。ブラウザの設定等をご確認ください。");
+            } else if (ev.error === 'network') {
                 document.getElementById('engine-status').innerText = "NET ERROR";
-            }
-            if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
-                console.warn("認識エラー:", ev.error);
             }
         };
 
         return rec;
     }
 
-    async function stopMedia() {
+    // 【スマホ最重要】クリックイベントの「同期処理」として一番最初に認識を走らせる
+    document.getElementById('btn-start').onclick = function() {
+        try {
+            document.getElementById('btn-start').disabled = true;
+            document.getElementById('engine-status').innerText = "CONNECTING";
+            isRunning = true;
+            
+            multiplier = parseFloat(document.getElementById('boost-select').value);
+            
+            // 認識エンジンを最優先で即座に直接スタート。これでストリームが詰まりません。
+            recognition = createRecognitionInstance();
+            if (recognition) {
+                recognition.start();
+            }
+
+            // マイクデバイス等のデバイス処理は認識が走り出した後に、裏側で非同期に処理させる
+            const deviceId = document.getElementById('mic-select').value;
+            const filterActive = document.getElementById('bgm-filter').checked;
+            const constraints = {
+                audio: {
+                    deviceId: deviceId !== 'default' && deviceId ? { exact: deviceId } : undefined,
+                    echoCancellation: true,
+                    noiseSuppression: filterActive,
+                    autoGainControl: true
+                }
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints).then(s => {
+                stream = s;
+                // 利用可能なマイク一覧をバックグラウンドでそっと更新
+                navigator.mediaDevices.enumerateDevices().then(devs => {
+                    const sel = document.getElementById('mic-select');
+                    const currentVal = sel.value;
+                    sel.innerHTML = '';
+                    devs.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = d.deviceId;
+                        opt.text = d.label || `Mic ${i + 1}`;
+                        sel.appendChild(opt);
+                    });
+                    if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal;
+                }).catch(e => console.error(e));
+            }).catch(err => {
+                console.warn("バックグラウンドマイク処理スキップ（認識は単独で継続します）", err);
+            });
+
+        } catch (err) {
+            console.error("起動エラー:", err);
+            document.getElementById('engine-status').innerText = "ERROR";
+            document.getElementById('btn-start').disabled = false;
+            isRunning = false;
+        }
+    };
+
+    document.getElementById('btn-stop').onclick = () => {
+        document.getElementById('btn-stop').disabled = true;
         isRunning = false;
         clearTimeout(restartTimeoutId);
 
@@ -233,51 +256,6 @@
             recognition = null;
         }
         if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); stream = null; }
-    }
-
-    document.getElementById('btn-start').onclick = function() {
-        try {
-            document.getElementById('btn-start').disabled = true;
-            document.getElementById('engine-status').innerText = "CONNECTING";
-            isRunning = true;
-            
-            multiplier = parseFloat(document.getElementById('boost-select').value);
-            
-            recognition = createRecognitionInstance();
-            if (!recognition) return;
-            recognition.start();
-
-            const deviceId = document.getElementById('mic-select').value;
-            const filterActive = document.getElementById('bgm-filter').checked;
-            const constraints = {
-                audio: {
-                    deviceId: deviceId ? { exact: deviceId } : undefined,
-                    echoCancellation: true,
-                    noiseSuppression: filterActive,
-                    autoGainControl: true
-                }
-            };
-
-            navigator.mediaDevices.getUserMedia(constraints).then(s => {
-                stream = s;
-                refreshDevices();
-                document.getElementById('btn-stop').disabled = false;
-            }).catch(err => {
-                console.error("マイク接続バックグラウンド処理:", err);
-                document.getElementById('btn-stop').disabled = false;
-            });
-
-        } catch (err) {
-            console.error("起動失敗:", err);
-            document.getElementById('engine-status').innerText = "ERROR";
-            document.getElementById('btn-start').disabled = false;
-            isRunning = false;
-        }
-    };
-
-    document.getElementById('btn-stop').onclick = async () => {
-        document.getElementById('btn-stop').disabled = true;
-        await stopMedia();
         
         document.getElementById('btn-start').disabled = false;
         document.getElementById('engine-status').innerText = "STOPPED";
@@ -286,24 +264,6 @@
 
     document.getElementById('boost-select').onchange = () => {
         multiplier = parseFloat(document.getElementById('boost-select').value);
-    };
-
-    document.getElementById('mic-select').onchange = async () => {
-        if (isRunning) {
-            document.getElementById('engine-status').innerText = "RECONNECTING";
-            await stopMedia();
-            isRunning = true;
-            document.getElementById('btn-start').click(); 
-        }
-    };
-
-    document.getElementById('bgm-filter').onchange = async () => {
-        if (isRunning) {
-            document.getElementById('engine-status').innerText = "FILTERING";
-            await stopMedia();
-            isRunning = true;
-            document.getElementById('btn-start').click(); 
-        }
     };
 
     function clearAll() { 
@@ -321,8 +281,6 @@
             setTimeout(() => document.getElementById('engine-status').innerText = originalText, 1500);
         });
     }
-
-    window.onload = init;
 </script>
 </body>
 </html>
