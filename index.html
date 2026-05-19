@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録（スマホ・PC完全対応版）</title>
+    <title>逐語録（完全フリーズ対策版）</title>
     <style>
         :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --warning: #ffc107; --secondary: #6c757d; --info: #17a2b8; }
         
@@ -74,6 +74,14 @@
             font-size: 16px; 
             box-sizing: border-box; 
         }
+        
+        /* コピー時の選択表示を確実にするため、非表示ではなく透明なテキストエリアとして配置 */
+        #dummy-textarea {
+            position: absolute;
+            left: -9999px;
+            opacity: 0;
+        }
+
         #final-span { color: #222; white-space: pre-wrap; }
         #interim-span { color: #999; font-style: italic; }
 
@@ -88,7 +96,7 @@
 <body>
 
 <div class="card">
-    <h2>逐語録（高速・安定版）</h2>
+    <h2>逐語録（高速・超安定版）</h2>
     
     <div class="conn-status">
         <div id="indicator" class="indicator"></div>
@@ -105,6 +113,7 @@
 
     <div class="status-area" id="status-display">「認識開始」を押してください。</div>
     <div id="output-box"><span id="final-span"></span><span id="interim-span"></span></div>
+    <textarea id="dummy-textarea" readonly></textarea>
 </div>
 
 <script>
@@ -119,6 +128,7 @@
     const statusDisp = document.getElementById('status-display');
     const indicator = document.getElementById('indicator');
     const connText = document.getElementById('conn-text');
+    const dummyTextarea = document.getElementById('dummy-textarea');
 
     let recognition = null;
     let isActive = false;
@@ -204,98 +214,4 @@
                         if (cleanedText === "") continue;
 
                         confirmedSet.add(cleanText);
-                        lastConfirmedText = result[0].transcript; 
-
-                        if (!/[。？！?!]$/.test(cleanedText)) cleanedText += "。";
-
-                        finalParagraphs.push(cleanedText);
-                        hasNewFinal = true;
-                    } else {
-                        if (!processedIndices.has(i) && !confirmedSet.has(cleanText)) {
-                            const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-                            let tempInterim = transcript.replace(fillerRegex, "")
-                                                         .replace(/[、\s]?(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)[、\s]?/g, " ")
-                                                         .trim();
-                            if (tempInterim) {
-                                interimText += tempInterim;
-                            }
-                        }
-                    }
-                }
-
-                if (hasNewFinal) {
-                    finalSpan.textContent = finalParagraphs.join("\n");
-                    interimSpan.textContent = '';
-                    outputBox.scrollTop = outputBox.scrollHeight;
-                } else {
-                    interimSpan.textContent = interimText;
-                    if (interimText) {
-                        outputBox.scrollTop = outputBox.scrollHeight;
-                    }
-                }
-            };
-
-            recognition.onend = () => {
-                recognition = null;
-                processedIndices.clear(); 
-                
-                // ミリ秒単位での超高速ループによる「文字落ち・音切れ」防止制御
-                if (isActive) {
-                    clearTimeout(restartTimer);
-                    restartTimer = setTimeout(() => {
-                        if (isActive) startSpeechEngine();
-                    }, 50); 
-                }
-            };
-
-            recognition.onerror = (ev) => {
-                console.log("SpeechRecognition error:", ev.error);
-                if (ev.error === 'no-speech') return;
-                
-                if (ev.error === 'not-allowed') {
-                    updateStatus('error', "エラー: マイクの使用権限がありません。");
-                    stopSpeechEngine();
-                } else {
-                    try { recognition.abort(); } catch(e){}
-                }
-            };
-
-            // Androidでの文字落ちを防ぐための内部オーディオ最適化設定の付与
-            if (recognition.maxAlternatives) {
-                recognition.maxAlternatives = 1;
-            }
-
-            recognition.start();
-        } catch(e) {
-            updateStatus('error', "エンジンの起動失敗: " + e.message);
-            recognition = null;
-        }
-    }
-
-    function stopSpeechEngine() {
-        isActive = false; 
-        clearTimeout(restartTimer);
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        updateStatus('', "停止しました。");
-        
-        if (recognition) {
-            try {
-                recognition.onend = null; 
-                recognition.abort(); 
-            } catch(e){}
-            recognition = null;
-        }
-        interimSpan.textContent = "";
-    }
-
-    startBtn.onclick = () => {
-        stopSpeechEngine(); 
-        
-        isActive = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        
-        finalParagraphs = [];
-        confirmedSet.clear();
-        processedIndices.clear();
+                        lastConfirmedText = result[0].transcript;
