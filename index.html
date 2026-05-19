@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>逐語録 Pro - Zero Drop (安定・モバイル対応版)</title>
+    <title>逐語録 Pro - Zero Drop (安定・Edge対応版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
@@ -21,7 +21,9 @@
         .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; }
         .interim { color: #8b949e; font-style: italic; }
         .monitor { background: #010409; padding: 8px 20px; border-top: 1px solid var(--border); }
-        #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
+        .meter-bg { height: 3px; background: #333; border-radius: 2px; margin: 5px 0; }
+        #meter-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.1s ease-out; }
+        #status-bar { display: space-between; font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
@@ -80,14 +82,16 @@
         <span id="engine-status">READY</span>
         <span id="mode-status" style="color: var(--accent);">MOBILE OPTIMIZED</span>
     </div>
+    <div class="meter-bg"><div id="meter-fill"></div></div>
 </div>
 
 <script>
     let recognition = null;
     let isRunning = false;
-    let stream = null;
+    let audioCtx = null, stream = null, source = null, analyser = null;
+    let animationFrameId = null;
     let restartTimeoutId = null;
-    let multiplier = 5.0; // 初期値を5.0に設定
+    let multiplier = 5.0;
 
     function resetPermissions() { window.location.reload(); }
 
@@ -144,12 +148,10 @@
         });
     }
 
+    // インスタンス作成関数を完全に独立化
     function createRecognitionInstance() {
         const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!Speech) {
-            alert("このブラウザは音声認識に対応していません。ChromeまたはSafariをお試しください。");
-            return null;
-        }
+        if (!Speech) return null;
 
         const rec = new Speech();
         rec.lang = 'ja-JP';
@@ -178,6 +180,7 @@
             }
         };
 
+        // スマホ用オートリスタート安全弁
         rec.onend = () => {
             if (isRunning) {
                 clearTimeout(restartTimeoutId);
@@ -187,7 +190,9 @@
                             recognition.start(); 
                         } catch(err) { 
                             console.warn("再起動セーフティ発動:", err);
+                            // Android特有のフリーズ時は、古いインスタンスを破棄してその場で新しく作成して解決
                             if (isRunning) {
+                                try { recognition.abort(); } catch(e){}
                                 recognition = createRecognitionInstance();
                                 if (recognition) recognition.start();
                             }
@@ -201,6 +206,7 @@
             if (ev.error === 'network') {
                 document.getElementById('engine-status').innerText = "NET ERROR";
             }
+            // no-speechやabortedはスマホ特有のライフサイクルの一部のためログ出力のみ
             if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
                 console.warn("認識エラー:", ev.error);
             }
@@ -212,6 +218,7 @@
     async function stopMedia() {
         isRunning = false;
         clearTimeout(restartTimeoutId);
+        if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; }
 
         if (recognition) {
             recognition.onend = null;
@@ -220,25 +227,39 @@
             try { recognition.abort(); } catch(e){}
             recognition = null;
         }
-        if (stream) { 
-            stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); 
-            stream = null; 
-        }
+        if (source) { try { source.disconnect(); } catch(e){} source = null; }
+        if (analyser) { try { analyser.disconnect(); } catch(e){} analyser = null; }
+        if (audioCtx) { try { await audioCtx.close(); } catch(e){} audioCtx = null; }
+        if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); stream = null; }
     }
 
+    function updateVolumeMeter() {
+        if (!isRunning || !analyser) return;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        
+        const meterFill = document.getElementById('meter-fill');
+        // メーターの感度にもmultiplier（ブースト値）を乗算
+        meterFill.style.width = Math.min(100, avg * multiplier * 1.5) + "%";
+        animationFrameId = requestAnimationFrame(updateVolumeMeter);
+    }
+
+    // ボタンのクリックイベント（同期イベントハンドラ）から直接認識を開始させる
     document.getElementById('btn-start').onclick = function() {
         try {
             document.getElementById('btn-start').disabled = true;
             document.getElementById('engine-status').innerText = "CONNECTING";
             isRunning = true;
             
-            // 開始時に選択されているブースト値を取得
             multiplier = parseFloat(document.getElementById('boost-select').value);
             
+            // 【スマホ対策①】awaitを挟まず、クリックされたこの瞬間に最優先で認識を走らせる
             recognition = createRecognitionInstance();
             if (!recognition) return;
             recognition.start();
 
+            // 【スマホ対策②】音声認識が走り出したあとに、マイクとオーディオ環境を裏で非同期に紐づける
             const deviceId = document.getElementById('mic-select').value;
             const filterActive = document.getElementById('bgm-filter').checked;
             const constraints = {
@@ -253,13 +274,24 @@
             navigator.mediaDevices.getUserMedia(constraints).then(s => {
                 stream = s;
                 refreshDevices();
+
+                // AudioContextの初期化
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                source = audioCtx.createMediaStreamSource(stream);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256; 
+
+                source.connect(analyser);
+                updateVolumeMeter();
+
                 document.getElementById('btn-stop').disabled = false;
             }).catch(err => {
-                console.error("マイクストリーム取得失敗:", err);
+                console.error("オーディオの接続失敗（認識は単独動作を試みます）:", err);
+                document.getElementById('btn-stop').disabled = false;
             });
 
         } catch (err) {
-            console.error("起動エラー:", err);
+            console.error("起動失敗:", err);
             document.getElementById('engine-status').innerText = "ERROR";
             document.getElementById('btn-start').disabled = false;
             isRunning = false;
@@ -271,6 +303,7 @@
         await stopMedia();
         
         document.getElementById('btn-start').disabled = false;
+        document.getElementById('meter-fill').style.width = "0%";
         document.getElementById('engine-status').innerText = "STOPPED";
         document.getElementById('active-line').innerText = "停止中";
     };
@@ -284,7 +317,7 @@
             document.getElementById('engine-status').innerText = "RECONNECTING";
             await stopMedia();
             isRunning = true;
-            document.getElementById('btn-start').click();
+            document.getElementById('btn-start').click(); // 擬似クリックでスマホの制限を回避
         }
     };
 
@@ -293,7 +326,7 @@
             document.getElementById('engine-status').innerText = "FILTERING";
             await stopMedia();
             isRunning = true;
-            document.getElementById('btn-start').click();
+            document.getElementById('btn-start').click(); // 擬似クリックでスマホの制限を回避
         }
     };
 
