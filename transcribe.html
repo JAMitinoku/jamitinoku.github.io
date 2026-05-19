@@ -86,7 +86,7 @@
         }
     }
 
-    // 感度セレクトボックスを1から100まで5刻みで生成（初期値15.0）
+    // 感度セレクトボックスを1から200まで10刻みで生成（初期値50.0）
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
@@ -95,10 +95,10 @@
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
 
-        for (let i = 5; i <= 100; i += 5) {
+        for (let i = 10; i <= 200; i += 10) {
             const opt = document.createElement('option');
             opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 15) opt.selected = true; // 15.0を初期選択
+            if (i === 50) opt.selected = true; // 50.0を初期選択
             boostSelect.appendChild(opt);
         }
     }
