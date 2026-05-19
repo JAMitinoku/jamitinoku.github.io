@@ -8,12 +8,10 @@
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
         
-        /* スマホでもボタンやセレクトボックスが綺麗に収まるよう調整 */
         .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
         .tool-group { display: flex; align-items: center; gap: 5px; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
         
-        /* スマホの誤タップを防ぐため、ボタンの押しやすさを維持しつつサイズ最適化 */
         button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
@@ -21,7 +19,6 @@
         
         .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 6px 10px; border-radius: 20px; border: 1px solid #444; }
         
-        /* 右側の操作ボタン群がスマホ画面で綺麗に右寄せ、または下段に折り返せるよう配置 */
         .action-group { margin-left: auto; display: flex; gap: 8px; }
         @media (max-width: 480px) {
             .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
@@ -33,7 +30,6 @@
         .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; }
         .interim { color: #8b949e; font-style: italic; }
         
-        /* レベルゲージ（メーター）をデザインから完全消去 */
         .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
         #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
     </style>
@@ -48,27 +44,7 @@
     <div class="tool-group">
         <label>感度:</label>
         <select id="boost-select">
-            <option value="1.0">1.0</option>
-            <option value="2.0">2.0</option>
-            <option value="3.0">3.0</option>
-            <option value="4.0">4.0</option>
-            <option value="5.0" selected>5.0</option>
-            <option value="6.0">6.0</option>
-            <option value="7.0">7.0</option>
-            <option value="8.0">8.0</option>
-            <option value="9.0">9.0</option>
-            <option value="10.0">10.0</option>
-            <option value="11.0">11.0</option>
-            <option value="12.0">12.0</option>
-            <option value="13.0">13.0</option>
-            <option value="14.0">14.0</option>
-            <option value="15.0">15.0</option>
-            <option value="16.0">16.0</option>
-            <option value="17.0">17.0</option>
-            <option value="18.0">18.0</option>
-            <option value="19.0">19.0</option>
-            <option value="20.0">20.0</option>
-        </select>
+            </select>
     </div>
     <div class="filter-toggle">
         <input type="checkbox" id="bgm-filter" checked>
@@ -105,7 +81,31 @@
 
     function resetPermissions() { window.location.reload(); }
 
+    // 感度の選択肢を「1」および「5から50まで5刻み」で自動生成する関数
+    function initBoostSelect() {
+        const boostSelect = document.getElementById('boost-select');
+        boostSelect.innerHTML = '';
+        
+        // 最初の選択肢として「1.0」を追加
+        const firstOpt = document.createElement('option');
+        firstOpt.value = "1.0";
+        firstOpt.text = "1.0";
+        boostSelect.appendChild(firstOpt);
+
+        // 5から50まで5刻みで追加（5, 10, 15, ..., 50）
+        for (let i = 5; i <= 50; i += 5) {
+            const opt = document.createElement('option');
+            opt.value = i.toFixed(1);
+            opt.text = i.toFixed(1);
+            if (i === 5) {
+                opt.selected = true; // 初期値を5.0に設定
+            }
+            boostSelect.appendChild(opt);
+        }
+    }
+
     async function init() {
+        initBoostSelect(); // 感度セレクトボックスの初期化
         try {
             const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
             temp.getTracks().forEach(t => t.stop());
@@ -235,7 +235,6 @@
         if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); stream = null; }
     }
 
-    // スマホのセキュリティ制限を回避するため、完全に同期で認識スタート
     document.getElementById('btn-start').onclick = function() {
         try {
             document.getElementById('btn-start').disabled = true;
@@ -244,7 +243,6 @@
             
             multiplier = parseFloat(document.getElementById('boost-select').value);
             
-            // 【スマホ最優先】レベルゲージを排除したため、競合なく一発でマイクと認識エンジンが連動
             recognition = createRecognitionInstance();
             if (!recognition) return;
             recognition.start();
