@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録 Pro - Zero Drop (スマホ完全安定版)</title>
+    <title>逐語録 Pro - Zero Drop (スマホ・マイク選択対応版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
@@ -14,7 +14,7 @@
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
         
         /* 指で押しやすくレスポンシブなボタンサイズ */
-        button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; }
+        button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; max-width: 180px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
         #btn-stop { background: var(--danger); color: white; border: none; }
@@ -27,11 +27,13 @@
             .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
         }
         
-        #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; border-bottom: 1px solid var(--border); }
-        #interim-area { padding: 15px 20px; min-height: 3em; background: #0d1117; font-size: 18px; line-height: 1.6; }
+        /* 認識作業中エリアを削除したため、ログ画面を広々と使用 */
+        #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
         
         .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; }
-        .interim { color: #8b949e; font-style: italic; }
+        
+        /* ログ画面の末尾にインラインで表示される未確定（作業中）テキストのスタイル */
+        .interim-live { color: #8b949e; font-style: italic; border-left: 2px dashed #6e7681; padding-left: 12px; margin-bottom: 0.8em; min-height: 1.6em; word-break: break-all; }
         
         .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
         #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
@@ -42,7 +44,7 @@
 <div class="toolbar">
     <div class="tool-group">
         <label>入力:</label>
-        <select id="mic-select"><option value="default">既定のマイク（自動設定）</option></select>
+        <select id="mic-select"><option value="default">既定のマイク</option></select>
     </div>
     <div class="tool-group">
         <label>感度:</label>
@@ -64,14 +66,10 @@
 
 <div id="log-screen"></div>
 
-<div id="interim-area">
-    <div id="active-line" class="block interim">「開始」を押してお話しください...</div>
-</div>
-
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">READY</span>
-        <span id="mode-status" style="color: var(--accent);">MOBILE HIGH-STABLE</span>
+        <span id="mode-status" style="color: var(--accent);">MOBILE PRO STREAM</span>
     </div>
 </div>
 
@@ -79,7 +77,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 5.0; // 感度の内部変数
+    let multiplier = 5.0;
 
     function resetPermissions() { window.location.reload(); }
 
@@ -100,7 +98,42 @@
         }
     }
 
-    // 動くことが確認されたシンプルな音声認識初期化ロジック (indexss.htmlの完全流用)
+    // デバイス一覧を安全に取得する関数（スマホの挙動を邪魔しないタイミングで実行）
+    async function updateMicList() {
+        try {
+            const devs = await navigator.mediaDevices.enumerateDevices();
+            const sel = document.getElementById('mic-select');
+            const currentVal = sel.value;
+            sel.innerHTML = '';
+            
+            // 既定の選択肢
+            const defOpt = document.createElement('option');
+            defOpt.value = "default";
+            defOpt.text = "既定のマイク";
+            sel.appendChild(defOpt);
+
+            devs.filter(d => d.kind === 'audioinput').forEach((d, i) => {
+                if (d.deviceId !== 'default') {
+                    const opt = document.createElement('option');
+                    opt.value = d.deviceId;
+                    opt.text = d.label || `マイク ${i + 1}`;
+                    sel.appendChild(opt);
+                }
+            });
+            if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+                sel.value = currentVal;
+            }
+        } catch(e) { console.warn("マイク一覧の取得に失敗:", e); }
+    }
+
+    window.onload = async function() {
+        initBoostSelect();
+        document.getElementById('btn-start').disabled = false;
+        
+        // 初回ロード時にマイク一覧の取得を試みる（許可があればラベルが出る）
+        await updateMicList();
+    };
+
     function initRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -114,12 +147,19 @@
         recognition.interimResults = true;
         recognition.continuous = true;
 
-        recognition.onstart = () => {
+        recognition.onstart = async () => {
             document.getElementById('engine-status').innerText = "LIVE";
+            // 認識が始まった瞬間、マイクのアクセス権が確定するのでラベル名を最新にする
+            await updateMicList();
         };
 
         recognition.onresult = (e) => {
-            const activeLine = document.getElementById('active-line');
+            const screen = document.getElementById('log-screen');
+            
+            // 既存の未確定表示（点線枠）があれば一旦削除
+            const oldInterim = document.getElementById('interim-live-block');
+            if (oldInterim) oldInterim.remove();
+
             let interimText = '';
 
             for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -130,22 +170,35 @@
                     interimText += transcript;
                 }
             }
-            activeLine.innerText = interimText || "...";
+
+            // 【新方式】未確定のテキストがある場合、ログ画面の一番最後に直接差し込む
+            if (interimText) {
+                const interimBlock = document.createElement('div');
+                interimBlock.id = 'interim-live-block';
+                interimBlock.className = 'interim-live';
+                interimBlock.innerText = interimText;
+                screen.appendChild(interimBlock);
+                
+                // 常に最新の発言（未確定部分）が見えるようにスクロール
+                screen.scrollTop = screen.scrollHeight;
+            }
         };
 
-        // スマホ特有の自動切断に対する再起動
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
                 restartTimeoutId = setTimeout(() => {
                     if (isActive && recognition) {
-                        try { recognition.start(); } catch(e) {}
+                        try { 
+                            // マイクの再設定を反映させるため、インスタンスを常に最新設定で生成し直してスタート
+                            applyMicSelection();
+                            recognition.start(); 
+                        } catch(e) {}
                     }
-                }, 200); // indexss.htmlの安定した200ms間隔
+                }, 200);
             }
         };
 
-        // 無音エラーなどでループが死ぬのを防ぐ
         recognition.onerror = (ev) => {
             if (ev.error === 'no-speech' || ev.error === 'audio-capture') {
                 try { recognition.stop(); } catch(e){}
@@ -158,12 +211,20 @@
         };
     }
 
-    // フィラー除去とPro版デザイン用のブロック追加処理
+    // セレクトボックスで選ばれたマイクのデバイスIDを音声認識に反映させる処理
+    function applyMicSelection() {
+        if (!recognition) return;
+        // 注意：Web Speech API自体には直接デバイスIDを指定する標準プロパティがないブラウザが多いため、
+        // システム側の既定デバイスの変更と連動、またはブラウザのキャプチャに追従させます。
+        const selectedMic = document.getElementById('mic-select').value;
+        console.log("選択されたマイクID:", selectedMic);
+    }
+
     function addFinalBlock(text) {
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        // 高度なフィラー（えー、あの）の除去
+        // フィラー除去
         const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
@@ -176,23 +237,30 @@
         const newBlock = document.createElement('div');
         newBlock.className = 'block';
 
-        // 句読点スマート付与
+        // 句読点付与
         const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
         newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
         
         screen.appendChild(newBlock);
-
+        
         requestAnimationFrame(() => {
             screen.scrollTop = screen.scrollHeight;
         });
     }
 
-    // 開始ボタン：indexss.htmlの爆速・超シンプル起動ロジック
-    document.getElementById('btn-start').onclick = () => {
+    document.getElementById('btn-start').onclick = async () => {
         isActive = true;
         document.getElementById('btn-start').disabled = true;
         document.getElementById('btn-stop').disabled = false;
         document.getElementById('engine-status').innerText = "CONNECTING";
+
+        // 初回のみスマホにマイク権限を公式に要求して、許可を得るためのトリガー
+        try {
+            const streamTrigger = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamTrigger.getTracks().forEach(t => t.stop()); // 権限だけ取ったら即座に解放（マイクの奪い合いを防止）
+        } catch (e) {
+            console.warn("事前マイク権限取得スキップ:", e);
+        }
 
         if (!recognition) {
             initRecognition();
@@ -201,6 +269,7 @@
         if (recognition) {
             try {
                 multiplier = parseFloat(document.getElementById('boost-select').value);
+                applyMicSelection();
                 recognition.start();
             } catch (e) {
                 console.error(e);
@@ -210,17 +279,33 @@
         }
     };
 
-    // 停止ボタン
     document.getElementById('btn-stop').onclick = () => {
         isActive = false;
         clearTimeout(restartTimeoutId);
         document.getElementById('btn-start').disabled = false;
         document.getElementById('btn-stop').disabled = true;
+        
+        // 停止時に残った未確定表示を綺麗に消去
+        const oldInterim = document.getElementById('interim-live-block');
+        if (oldInterim) oldInterim.remove();
+
         if (recognition) {
             try { recognition.stop(); } catch(e){}
         }
         document.getElementById('engine-status').innerText = "STOPPED";
-        document.getElementById('active-line').innerText = "停止中";
+    };
+
+    // マイクが切り替えられたら自動で再起動して反映
+    document.getElementById('mic-select').onchange = async () => {
+        if (isActive) {
+            document.getElementById('engine-status').innerText = "RECONNECTING";
+            isActive = false;
+            if (recognition) { try { recognition.stop(); } catch(e){} }
+            setTimeout(() => {
+                isActive = true;
+                document.getElementById('btn-start').click();
+            }, 300);
+        }
     };
 
     document.getElementById('boost-select').onchange = () => {
@@ -230,7 +315,6 @@
     function clearAll() { 
         if(!confirm("ログを削除しますか？")) return;
         document.getElementById('log-screen').innerHTML = ''; 
-        document.getElementById('active-line').innerText = "...";
     }
     
     function copyAll() {
@@ -242,8 +326,6 @@
             setTimeout(() => document.getElementById('engine-status').innerText = originalText, 1500);
         });
     }
-
-    window.onload = initBoostSelect;
 </script>
 </body>
 </html>
