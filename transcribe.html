@@ -19,6 +19,9 @@
         
         .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 6px 10px; border-radius: 20px; border: 1px solid #444; }
         
+        /* 権限リセットボタン専用（他のボタンと離すため、少しマージンを確保） */
+        .btn-reset { margin-right: 15px; border-color: #444; color: #8b949e; }
+        
         .action-group { margin-left: auto; display: flex; gap: 8px; }
         @media (max-width: 480px) {
             .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
@@ -37,6 +40,8 @@
 <body>
 
 <div class="toolbar">
+    <button onclick="resetPermissions()" class="btn-reset">権限リセット</button>
+
     <div class="tool-group">
         <label>入力:</label>
         <select id="mic-select"><option value="default">既定のマイク</option></select>
@@ -51,9 +56,10 @@
     </div>
     <button id="btn-start">開始</button>
     <button id="btn-stop" disabled>停止</button>
+    
     <div class="action-group">
-        <button onclick="resetPermissions()">権限リセット</button>
         <button onclick="copyAll()">コピー</button>
+        <button onclick="saveAll()" style="color: var(--accent);">結果保存</button>
         <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
     </div>
 </div>
@@ -73,7 +79,12 @@
     let restartTimeoutId = null;
     let multiplier = 15.0; // 初期値15.0
 
-    function resetPermissions() { window.location.reload(); }
+    // 確認メッセージを出してからページをリロード（権限リセット）
+    function resetPermissions() { 
+        if (confirm("ページを再読み込みしてマイクの権限設定などをリセットしますか？\n（現在のログは消去されます）")) {
+            window.location.reload(); 
+        }
+    }
 
     // 感度セレクトボックスを1から100まで5刻みで生成（初期値15.0）
     function initBoostSelect() {
@@ -167,7 +178,7 @@
             }
         };
 
-        // 瞬断による文字落ちを防ぐ超高速リスタート（30msウェイト）
+        // 瞬断による文字落ちを防ぐ超高速リスタート（50msウェイト）
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
@@ -180,7 +191,7 @@
                             forceResetEngine();
                         }
                     }
-                }, 30); 
+                }, 50); 
             }
         };
 
@@ -321,6 +332,21 @@
             document.getElementById('engine-status').innerText = "COPIED!";
             setTimeout(() => document.getElementById('engine-status').innerText = originalText, 1500);
         });
+    }
+
+    // 結果保存機能（テキストファイルとしてダウンロード）
+    function saveAll() {
+        const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n');
+        if (!text) {
+            alert("保存するテキストがありません。");
+            return;
+        }
+        const blob = new Blob([text], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'transcribe_log.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
     }
 </script>
 </body>
