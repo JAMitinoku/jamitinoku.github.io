@@ -30,7 +30,7 @@
         #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
         .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; transition: background 0.2s; }
         
-        /* 【追加】確定テキストブロックのホバー時と編集中のスタイル */
+        /* 確定テキストブロックのホバー時と編集中のスタイル */
         .block:hover { background: #161b22; cursor: text; }
         .block:focus { outline: none; background: #1f242c; border-left-color: #ffad33; border-radius: 0 4px 4px 0; padding-right: 8px; }
         
@@ -82,6 +82,9 @@
     let isActive = false;
     let restartTimeoutId = null;
     let multiplier = 15.0; // 初期値15.0
+
+    // 【Android多重表示対策】確定済みテキストを一時的に記録する履歴バッファ
+    const finalHistory = new Set();
 
     // 確認メッセージを出してからページをリロード（権限リセット）
     function resetPermissions() { 
@@ -229,8 +232,24 @@
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
 
+        // 【Android重複対策 1】過去の確定バッファに含まれている場合は完全に弾く
+        if (finalHistory.has(cleanedText)) return;
+
         const screen = document.getElementById('log-screen');
-        if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
+        if (screen.lastElementChild) {
+            const lastText = screen.lastElementChild.innerText.replace(/[。？！\?\!]$/, "").trim();
+            // 【Android重複対策 2】直前の行と内容が「完全一致」「内包（部分一致）」する場合は重複とみなす
+            if (lastText === cleanedText || lastText.includes(cleanedText) || cleanedText.includes(lastText)) {
+                return;
+            }
+        }
+
+        // 履歴を保存（メモリリーク防止のため最大100件まで保持）
+        finalHistory.add(cleanedText);
+        if (finalHistory.size > 100) {
+            const firstKey = finalHistory.values().next().value;
+            finalHistory.delete(firstKey);
+        }
 
         const newBlock = document.createElement('div');
         newBlock.className = 'block';
@@ -238,7 +257,7 @@
         const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
         newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
         
-        // 【追加】インライン編集機能のリスナーを設定
+        // インライン編集機能のリスナーを設定
         newBlock.onclick = function() {
             if (this.getAttribute('contenteditable') !== 'true') {
                 this.setAttribute('contenteditable', 'true');
@@ -350,6 +369,7 @@
     function clearAll() { 
         if(!confirm("ログを削除しますか？")) return;
         document.getElementById('log-screen').innerHTML = ''; 
+        finalHistory.clear(); // 履歴も同時にクリア
     }
     
     function copyAll() {
