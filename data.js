@@ -15,11 +15,11 @@ const cmsData = {
     },
     {
       id: 2,
-      date: "",
+      date: "2026年05月19日",
       category: "",
-      title: "",
-      content: "",
-      url: "" // ← リンクがない場合は空欄にするだけ
+      title: "NDLOCR-Lite Web",
+      content: "国立国会図書館が開発した、AI利用の日本語OCR",
+      url: "https://ndlocr-liteweb.netlify.app/" // ← リンクがない場合は空欄にするだけ
     },
     {
       id: 1,
