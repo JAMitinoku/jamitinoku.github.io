@@ -178,7 +178,7 @@
             }
         };
 
-        // 瞬断による文字落ちを防ぐ超高速リスタート（50msウェイト）
+        // 瞬断による文字落ちを防ぐ超高速リスタート（20msウェイト）
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
@@ -191,7 +191,7 @@
                             forceResetEngine();
                         }
                     }
-                }, 50); 
+                }, 20); 
             }
         };
 
