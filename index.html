@@ -46,7 +46,7 @@
         <select id="boost-select"></select>
     </div>
     <div class="filter-toggle">
-        <input type="checkbox" id="bgm-filter" checked>
+        <input type="checkbox" id="bgm-filter">
         <label for="bgm-filter">ノイズ除去</label>
     </div>
     <button id="btn-start">開始</button>
@@ -71,7 +71,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 15.0; // 初期値を15.0に設定
+    let multiplier = 15.0; // 初期値15.0
 
     function resetPermissions() { window.location.reload(); }
 
@@ -80,16 +80,14 @@
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
         
-        // ベースの1.0を最初に追加
         const firstOpt = document.createElement('option');
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
 
-        // 5から100まで5刻みで追加
         for (let i = 5; i <= 100; i += 5) {
             const opt = document.createElement('option');
             opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 15) opt.selected = true; // 15.0をデフォルト選択
+            if (i === 15) opt.selected = true; // 15.0を初期選択
             boostSelect.appendChild(opt);
         }
     }
@@ -236,7 +234,10 @@
         document.getElementById('engine-status').innerText = "CONNECTING";
 
         try {
-            const streamTrigger = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const filterActive = document.getElementById('bgm-filter').checked;
+            const streamTrigger = await navigator.mediaDevices.getUserMedia({ 
+                audio: { noiseSuppression: filterActive } 
+            });
             streamTrigger.getTracks().forEach(t => t.stop());
         } catch (e) { console.warn("権限プリチェック・スキップ", e); }
 
@@ -273,6 +274,23 @@
     document.getElementById('mic-select').onchange = async () => {
         if (isActive) {
             document.getElementById('engine-status').innerText = "RECONNECTING";
+            isActive = false;
+            clearTimeout(restartTimeoutId);
+            if (recognition) {
+                try { recognition.abort(); } catch(e){}
+                recognition = null;
+            }
+            setTimeout(() => {
+                isActive = true;
+                document.getElementById('btn-start').click();
+            }, 200);
+        }
+    };
+
+    // ノイズ除去の切り替え時も再接続
+    document.getElementById('bgm-filter').onchange = async () => {
+        if (isActive) {
+            document.getElementById('engine-status').innerText = "FILTERING";
             isActive = false;
             clearTimeout(restartTimeoutId);
             if (recognition) {
