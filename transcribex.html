@@ -19,7 +19,6 @@
         
         .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 6px 10px; border-radius: 20px; border: 1px solid #444; }
         
-        /* 権限リセットボタン専用（他のボタンと離すため、少しマージンを確保） */
         .btn-reset { margin-right: 15px; border-color: #444; color: #8b949e; }
         
         .action-group { margin-left: auto; display: flex; gap: 8px; }
@@ -30,11 +29,9 @@
         #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
         .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; transition: background 0.2s; }
         
-        /* 確定テキストブロックのホバー時と編集中のスタイル */
         .block:hover { background: #161b22; cursor: text; }
         .block:focus { outline: none; background: #1f242c; border-left-color: #ffad33; border-radius: 0 4px 4px 0; padding-right: 8px; }
         
-        /* 未確定（作業中）テキストを最下部に美しくマージ */
         .interim-live { color: #8b949e; font-style: italic; border-left: 2px dashed #6e7681; padding-left: 12px; margin-bottom: 0.8em; min-height: 1.6em; word-break: break-all; }
         
         .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
@@ -81,23 +78,20 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 15.0; // 初期値15.0
+    let multiplier = 15.0;
 
-    // 【Android多重表示対策】確定済みテキストを一時的に記録する履歴バッファ
-    const finalHistory = new Set();
+    // 【Android対策】直近の確定テキストを保持する変数
+    let lastFinalText = "";
 
-    // 確認メッセージを出してからページをリロード（権限リセット）
     function resetPermissions() { 
         if (confirm("ページを再読み込みしてマイクの権限設定などをリセットしますか？\n（現在のログは消去されます）")) {
             window.location.reload(); 
         }
     }
 
-    // 感度セレクトボックスを1から200まで10刻みで生成（初期値50.0）
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
-        
         const firstOpt = document.createElement('option');
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
@@ -105,7 +99,7 @@
         for (let i = 10; i <= 200; i += 10) {
             const opt = document.createElement('option');
             opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 50) opt.selected = true; // 50.0を初期選択
+            if (i === 50) opt.selected = true;
             boostSelect.appendChild(opt);
         }
     }
@@ -160,7 +154,6 @@
 
         recognition.onresult = (e) => {
             const screen = document.getElementById('log-screen');
-            
             const oldInterim = document.getElementById('interim-live-block');
             if (oldInterim) oldInterim.remove();
 
@@ -185,7 +178,6 @@
             }
         };
 
-        // 瞬断による文字落ちを防ぐ超高速リスタート（20msウェイト）
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
@@ -224,6 +216,21 @@
         }
     }
 
+    // 【新ロジック】二つのテキストの重複部分を計算してマージする関数
+    function mergeOverlap(prev, next) {
+        if (!prev) return next;
+        if (prev === next || prev.includes(next)) return ""; // 完全重複、または過去に含まれているなら追加不要
+        
+        // 新しいテキストが過去のテキストの末尾から始まっているか、重なりを探す
+        let maxLength = Math.min(prev.length, next.length);
+        for (let len = maxLength; len > 0; len--) {
+            if (prev.endsWith(next.substring(0, len))) {
+                return next.substring(len); // 重複部分を切り取って返す
+            }
+        }
+        return next;
+    }
+
     function addFinalBlock(text) {
         let cleanedText = text.trim();
         if (!cleanedText) return;
@@ -232,32 +239,24 @@
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
 
-        // 【Android重複対策 1】過去の確定バッファに含まれている場合は完全に弾く
-        if (finalHistory.has(cleanedText)) return;
+        // 【Android文字落ち・多重対策コア】
+        // 直前テキストと今回入ってきたテキストの「重なり」を計算し、重複部分を削り落とす
+        let uniqueText = mergeOverlap(lastFinalText, cleanedText);
+        uniqueText = uniqueText.trim();
+        
+        // 重複を引いた結果、中身が空っぽになった場合は完全に重複なので処理をスキップ
+        if (!uniqueText) return;
+
+        // 過去の記憶を更新（ノイズ除去用に、今回入った生テキストを保存しておく）
+        lastFinalText = cleanedText;
 
         const screen = document.getElementById('log-screen');
-        if (screen.lastElementChild) {
-            const lastText = screen.lastElementChild.innerText.replace(/[。？！\?\!]$/, "").trim();
-            // 【Android重複対策 2】直前の行と内容が「完全一致」「内包（部分一致）」する場合は重複とみなす
-            if (lastText === cleanedText || lastText.includes(cleanedText) || cleanedText.includes(lastText)) {
-                return;
-            }
-        }
-
-        // 履歴を保存（メモリリーク防止のため最大100件まで保持）
-        finalHistory.add(cleanedText);
-        if (finalHistory.size > 100) {
-            const firstKey = finalHistory.values().next().value;
-            finalHistory.delete(firstKey);
-        }
-
         const newBlock = document.createElement('div');
         newBlock.className = 'block';
 
-        const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
-        newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
+        const hasPunctuation = /[。？！\?\!]$/.test(uniqueText);
+        newBlock.innerText = uniqueText + (hasPunctuation ? "" : "。");
         
-        // インライン編集機能のリスナーを設定
         newBlock.onclick = function() {
             if (this.getAttribute('contenteditable') !== 'true') {
                 this.setAttribute('contenteditable', 'true');
@@ -268,7 +267,6 @@
         newBlock.onblur = function() {
             this.removeAttribute('contenteditable');
             this.innerText = this.innerText.trim();
-            // 編集の結果、空欄になった場合はブロック自体を自動削除
             if (this.innerText === "") {
                 this.remove();
             }
@@ -276,8 +274,8 @@
 
         newBlock.onkeydown = function(e) {
             if (e.key === 'Enter') {
-                e.preventDefault(); // 改行の挿入を防ぐ
-                this.blur();        // フォーカスを外して編集を確定
+                e.preventDefault();
+                this.blur();
             }
         };
         
@@ -345,7 +343,6 @@
         }
     };
 
-    // ノイズ除去の切り替え時も再接続
     document.getElementById('bgm-filter').onchange = async () => {
         if (isActive) {
             document.getElementById('engine-status').innerText = "FILTERING";
@@ -369,7 +366,7 @@
     function clearAll() { 
         if(!confirm("ログを削除しますか？")) return;
         document.getElementById('log-screen').innerHTML = ''; 
-        finalHistory.clear(); // 履歴も同時にクリア
+        lastFinalText = ""; // 記憶バッファも完全にクリア
     }
     
     function copyAll() {
@@ -382,7 +379,6 @@
         });
     }
 
-    // 結果保存機能（テキストファイルとしてダウンロード）
     function saveAll() {
         const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n');
         if (!text) {
