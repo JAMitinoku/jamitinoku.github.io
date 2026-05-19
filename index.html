@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録（完全最適化・決定版）</title>
+    <title>逐語録（スマホ・PC完全対応版）</title>
     <style>
         :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --warning: #ffc107; --secondary: #6c757d; --info: #17a2b8; }
         
@@ -37,37 +37,6 @@
         .error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
         @keyframes blink { 50% { opacity: 0.5; } }
 
-        .setting-box { 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 10px; 
-            margin-bottom: 15px; 
-            border: 1px solid #eee;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.85em;
-            font-weight: bold;
-            color: #555;
-            gap: 10px;
-        }
-        
-        select {
-            padding: 6px 10px;
-            border-radius: 6px;
-            border: 1px solid #ddd;
-            font-size: 14px;
-            background: #fff;
-            cursor: pointer;
-            max-width: 65%;
-            text-overflow: ellipsis;
-        }
-
         .controls { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
         
         button { 
@@ -94,8 +63,8 @@
         
         #output-box { 
             width: 100%; 
-            height: calc(100vh - 350px); 
-            min-height: 250px;
+            height: calc(100vh - 240px); 
+            min-height: 300px;
             padding: 15px; 
             border-radius: 12px; 
             border: 1px solid #eef; 
@@ -112,31 +81,18 @@
             body { padding: 5px; }
             .card { padding: 15px; border-radius: 0; }
             button { font-size: 13px; padding: 10px 4px; }
-            #output-box { height: calc(100vh - 330px); }
+            #output-box { height: calc(100vh - 220px); }
         }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>逐語録</h2>
+    <h2>逐語録（高速・安定版）</h2>
     
     <div class="conn-status">
         <div id="indicator" class="indicator"></div>
         <span id="conn-text">音声認識：待機中</span>
-    </div>
-
-    <div class="setting-box">
-        <div class="setting-item">
-            <span>使用するマイク選択</span>
-            <select id="mic-select">
-                <option value="">検出中...</option>
-            </select>
-        </div>
-        <div class="setting-item">
-            <span>感度調整（ブースト）</span>
-            <select id="gain-select"></select>
-        </div>
     </div>
 
     <div class="controls">
@@ -152,8 +108,6 @@
 </div>
 
 <script>
-    const micSelect = document.getElementById('mic-select');
-    const gainSelect = document.getElementById('gain-select');
     const startBtn = document.getElementById('start');
     const stopBtn = document.getElementById('stop');
     const copyBtn = document.getElementById('copy');
@@ -166,23 +120,9 @@
     const indicator = document.getElementById('indicator');
     const connText = document.getElementById('conn-text');
 
-    // 1〜20倍ブーストドロップダウン生成
-    for (let i = 1; i <= 20; i++) {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.innerText = `${i}倍` + (i === 5 ? ' (推奨)' : (i === 1 ? ' (標準)' : ''));
-        if (i === 5) opt.selected = true; 
-        gainSelect.appendChild(opt);
-    }
-
     let recognition = null;
     let isActive = false;
     let restartTimer = null;
-    
-    let audioContext = null;
-    let audioSource = null;
-    let gainNode = null;
-    let hardwareStream = null;
     
     let finalParagraphs = [];
     let confirmedSet = new Set();
@@ -201,7 +141,7 @@
             statusDisp.style.background = "#f8d7da"; 
             statusDisp.style.color = "#721c24";
         } else if(type === 'connecting') {
-            connText.innerText = "音声認識 : 接続処理中..."; 
+            connText.innerText = "音声認識 : 起動処理中..."; 
             statusDisp.style.background = "#fff3cd"; 
             statusDisp.style.color = "#856404";
         } else { 
@@ -209,94 +149,6 @@
             statusDisp.style.background = "#f8f9fa"; 
             statusDisp.style.color = "#333";
         }
-    }
-
-    // セキュリティロックを最速で解除してマイクデバイス名をAndroid/PC共に完全ロードする関数
-    async function initAndLoadMics() {
-        let dummy = null;
-        try {
-            dummy = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const currentSelection = micSelect.value;
-            
-            micSelect.innerHTML = '<option value="">既定のマイク（システム依存）</option>';
-            
-            let count = 1;
-            devices.forEach(device => {
-                if (device.kind === 'audioinput') {
-                    const opt = document.createElement('option');
-                    opt.value = device.deviceId;
-                    opt.innerText = device.label || `入力デバイス / マイク ${count++}`;
-                    if (device.deviceId === currentSelection) opt.selected = true;
-                    micSelect.appendChild(opt);
-                }
-            });
-        } catch (e) {
-            micSelect.innerHTML = '<option value="">既定のマイク（システム依存）</option>';
-        } finally {
-            if (dummy) dummy.getTracks().forEach(t => t.stop());
-        }
-    }
-
-    // 画面ロード時にマイクを確定させる
-    window.addEventListener('DOMContentLoaded', initAndLoadMics);
-
-    // 文字落ちの最大原因「ブラウザの音質制限」を完全解除し、裏で1〜20倍の音量処理を安全に行う
-    async function setupAudioPipeline() {
-        if (audioSource) { try { audioSource.disconnect(); } catch(e){} audioSource = null; }
-        if (gainNode) { try { gainNode.disconnect(); } catch(e){} gainNode = null; }
-        if (hardwareStream) {
-            hardwareStream.getTracks().forEach(t => t.stop());
-            hardwareStream = null;
-        }
-
-        // 音声認識の間引き（音切れ・文字落ち）を徹底的に防ぐための完全生音声フラグ
-        const constraints = {
-            audio: {
-                echoCancellation: false,   // エコーキャンセルを完全オフ（声を消させない）
-                noiseSuppression: false,   // ノイズ除去を完全オフ（語尾まで100%拾う）
-                autoGainControl: false     // 自動音量調整を完全オフ（音量を勝手に下げさせない）
-            }
-        };
-
-        if (micSelect.value) {
-            constraints.audio.deviceId = { exact: micSelect.value };
-        }
-
-        try {
-            hardwareStream = await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (err) {
-            if (constraints.audio.deviceId) {
-                delete constraints.audio.deviceId;
-                hardwareStream = await navigator.mediaDevices.getUserMedia(constraints);
-                micSelect.value = ""; 
-            } else {
-                throw err;
-            }
-        }
-
-        // マイク切替を即座にUIリストへ最新反映
-        await initAndLoadMics();
-
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
-
-        audioSource = audioContext.createMediaStreamSource(hardwareStream);
-        gainNode = audioContext.createGain();
-        
-        // 1〜20倍の指定ブースト倍率を設定
-        const boostValue = parseFloat(gainSelect.value) || 1.0;
-        gainNode.gain.setValueAtTime(boostValue, audioContext.currentTime);
-
-        audioSource.connect(gainNode);
-        
-        // 音声認識エンジンの内部バグ・フリーズを絶対に起こさないセーフティ出力バインド
-        const dummyDest = audioContext.createMediaStreamDestination();
-        gainNode.connect(dummyDest);
     }
 
     function startSpeechEngine() {
@@ -315,7 +167,7 @@
             recognition.continuous = true; 
 
             recognition.onstart = () => {
-                updateStatus('online', "マイク音質を最適化して認識中。お話しください。");
+                updateStatus('online', "音声を認識しています。お話しください。");
             };
 
             recognition.onresult = (e) => {
@@ -387,12 +239,12 @@
                 recognition = null;
                 processedIndices.clear(); 
                 
-                // 無音時のエンジン終了を検知してミリ秒単位で超高速ループ再起動
+                // ミリ秒単位での超高速ループによる「文字落ち・音切れ」防止制御
                 if (isActive) {
                     clearTimeout(restartTimer);
                     restartTimer = setTimeout(() => {
                         if (isActive) startSpeechEngine();
-                    }, 100); 
+                    }, 50); 
                 }
             };
 
@@ -402,11 +254,16 @@
                 
                 if (ev.error === 'not-allowed') {
                     updateStatus('error', "エラー: マイクの使用権限がありません。");
-                    stopSpeechEngine(true);
+                    stopSpeechEngine();
                 } else {
                     try { recognition.abort(); } catch(e){}
                 }
             };
+
+            // Androidでの文字落ちを防ぐための内部オーディオ最適化設定の付与
+            if (recognition.maxAlternatives) {
+                recognition.maxAlternatives = 1;
+            }
 
             recognition.start();
         } catch(e) {
@@ -415,7 +272,7 @@
         }
     }
 
-    function stopSpeechEngine(closeHardware = false) {
+    function stopSpeechEngine() {
         isActive = false; 
         clearTimeout(restartTimer);
         startBtn.disabled = false;
@@ -429,30 +286,11 @@
             } catch(e){}
             recognition = null;
         }
-
-        if (closeHardware) {
-            if (audioSource) { try { audioSource.disconnect(); } catch(e){} audioSource = null; }
-            if (gainNode) { try { gainNode.disconnect(); } catch(e){} gainNode = null; }
-            if (hardwareStream) {
-                hardwareStream.getTracks().forEach(track => track.stop());
-                hardwareStream = null;
-            }
-        }
         interimSpan.textContent = "";
     }
 
-    // 稼働中にマイクデバイスやブースト倍率を変更した際の超高速リバインド処理
-    async function handleConfigChange() {
-        if (!isActive) return;
-        try {
-            await setupAudioPipeline();
-        } catch(e) {
-            console.log("オーディオパイプライン更新エラー:", e);
-        }
-    }
-
-    startBtn.onclick = async () => {
-        stopSpeechEngine(true); 
+    startBtn.onclick = () => {
+        stopSpeechEngine(); 
         
         isActive = true;
         startBtn.disabled = true;
@@ -461,68 +299,3 @@
         finalParagraphs = [];
         confirmedSet.clear();
         processedIndices.clear();
-        lastConfirmedText = "";
-        
-        updateStatus('connecting', "最適化処理を適用中...");
-        
-        try {
-            // 1. まずブラウザの音声制限を破壊し、手動ブーストパイプラインを起動
-            await setupAudioPipeline();
-            // 2. 音声認識エンジンを完全に並行稼働（フリーズを完璧に回避）
-            startSpeechEngine();
-        } catch (e) {
-            updateStatus('error', "起動失敗: " + e.message);
-            stopSpeechEngine(true);
-        }
-    };
-
-    stopBtn.onclick = () => {
-        stopSpeechEngine(true); 
-    };
-
-    // 設定変更イベントバインド
-    micSelect.onchange = handleConfigChange;
-    gainSelect.onchange = handleConfigChange;
-
-    copyBtn.onclick = async () => {
-        const text = finalSpan.textContent;
-        if (!text.trim()) return;
-        try {
-            await navigator.clipboard.writeText(text);
-            const originalText = copyBtn.innerText;
-            copyBtn.innerText = "コピー完了！";
-            setTimeout(() => copyBtn.innerText = originalText, 2000);
-        } catch (err) {
-            alert("長押ししてコピーしてください：\n\n" + text);
-        }
-    };
-
-    saveBtn.onclick = () => {
-        const text = finalSpan.textContent;
-        if (!text.trim()) return;
-        const now = new Date();
-        const timestamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `逐語録_${timestamp}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
-    clearBtn.onclick = () => {
-        if (confirm("テキストをすべて消去しますか？")) {
-            finalSpan.textContent = ""; 
-            interimSpan.textContent = "";
-            finalParagraphs = [];
-            confirmedSet.clear();
-            processedIndices.clear();
-            lastConfirmedText = "";
-        }
-    };
-</script>
-</body>
-</html>
