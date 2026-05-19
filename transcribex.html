@@ -47,7 +47,7 @@
         <label>入力:</label>
         <select id="mic-select"><option value="default">既定のマイク</option></select>
     </div>
-    <div class="tool-group" style="display:none;">
+    <div class="tool-group">
         <label>感度:</label>
         <select id="boost-select"></select>
     </div>
@@ -78,7 +78,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 1.0;
+    let multiplier = 50.0; // デフォルト値を50.0に設定
     let lastFinalText = "";
 
     function resetPermissions() { 
@@ -87,12 +87,20 @@
         }
     }
 
+    // 元のブースト選択肢（1.0〜200.0）を再生成するロジックを復元
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
         const firstOpt = document.createElement('option');
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
+
+        for (let i = 10; i <= 200; i += 10) {
+            const opt = document.createElement('option');
+            opt.value = i.toFixed(1); opt.text = i.toFixed(1);
+            if (i === 50) opt.selected = true; // デフォルトは50.0
+            boostSelect.appendChild(opt);
+        }
     }
 
     async function updateMicList() {
@@ -137,7 +145,6 @@
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.interimResults = true;
-        // continuousはAndroidで無視されやすいが、一応trueに設定
         recognition.continuous = true;
 
         recognition.onstart = async () => {
@@ -173,7 +180,6 @@
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
-                // Androidのブツ切り対策：認識が切れたら即座に再起動をかける
                 restartTimeoutId = setTimeout(() => {
                     if (isActive && recognition) {
                         try { 
@@ -189,7 +195,7 @@
         recognition.onerror = (ev) => {
             console.warn("認識エラーハンドリング:", ev.error);
             if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
-                // 何も話していない時のタイムアウト等はスルーして再起動を待つ
+                // 自動復帰を待つ
             } else if (ev.error === 'not-allowed') {
                 document.getElementById('engine-status').innerText = "マイク許可なし";
             }
@@ -207,15 +213,12 @@
         }
     }
 
-    // Androidの重複バッファ対策を緩和
     function mergeOverlap(prev, next) {
         if (!prev) return next;
         if (prev === next) return ""; 
         
-        // Android特有の、直前の確定文字が含まれているかどうかの簡易チェック
         if (prev.length > 4 && next.length > 4) {
             if (prev.includes(next) || next.includes(prev)) {
-                // 完全に内包されている場合は、短い方を無視、または差分だけにする
                 if (prev.endsWith(next)) return "";
             }
         }
@@ -283,14 +286,13 @@
         document.getElementById('btn-stop').disabled = false;
         document.getElementById('engine-status').innerText = "CONNECTING";
 
-        // Androidでのオーディオ競合を防ぐため、開始前の重複したgetUserMediaを削除
-
         if (!recognition) {
             initRecognition();
         }
 
         if (recognition) {
             try {
+                multiplier = parseFloat(document.getElementById('boost-select').value);
                 recognition.start();
             } catch (e) {
                 forceResetEngine();
@@ -343,6 +345,11 @@
                 document.getElementById('btn-start').click();
             }, 200);
         }
+    };
+
+    // 感度変更時のイベントを復元
+    document.getElementById('boost-select').onchange = () => {
+        multiplier = parseFloat(document.getElementById('boost-select').value);
     };
 
     function clearAll() { 
