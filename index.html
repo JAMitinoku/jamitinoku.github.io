@@ -3,325 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録 Pro - Zero Drop (スマホ・マイク選択対応版)</title>
+    <title>管理ツール一覧</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
     <style>
-        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        
-        .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-        .tool-group { display: flex; align-items: center; gap: 5px; }
-        label { font-size: 11px; color: #8b949e; white-space: nowrap; }
-        
-        button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; max-width: 180px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
-        #btn-stop { background: var(--danger); color: white; border: none; }
-        
-        .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 6px 10px; border-radius: 20px; border: 1px solid #444; }
-        
-        .action-group { margin-left: auto; display: flex; gap: 8px; }
-        @media (max-width: 480px) {
-            .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
-        }
-        
-        #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
-        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; }
-        
-        /* 未確定（作業中）テキストを最下部に美しくマージ */
-        .interim-live { color: #8b949e; font-style: italic; border-left: 2px dashed #6e7681; padding-left: 12px; margin-bottom: 0.8em; min-height: 1.6em; word-break: break-all; }
-        
-        .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
-        #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
+        .news-card { margin-bottom: 2rem; padding: 1.5rem; }
+        .meta-info { display: flex; gap: 1rem; margin-bottom: 0.5rem; font-size: 0.9rem; }
+        .category { background: #e0e0e0; padding: 2px 8px; border-radius: 4px; color: #333; }
+        .date { color: #666; }
+        /* ボタンのサイズを少し小さく調整 */
+        .more-link { display: inline-block; margin-top: 1rem; padding: 0.5rem 1.2rem; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-<div class="toolbar">
-    <div class="tool-group">
-        <label>入力:</label>
-        <select id="mic-select"><option value="default">既定のマイク</option></select>
-    </div>
-    <div class="tool-group">
-        <label>感度:</label>
-        <select id="boost-select"></select>
-    </div>
-    <div class="filter-toggle">
-        <input type="checkbox" id="bgm-filter">
-        <label for="bgm-filter">ノイズ除去</label>
-    </div>
-    <button id="btn-start">開始</button>
-    <button id="btn-stop" disabled>停止</button>
-    <div class="action-group">
-        <button onclick="resetPermissions()">権限リセット</button>
-        <button onclick="copyAll()">コピー</button>
-        <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
-    </div>
-</div>
+    <main class="container">
+        <header style="text-align: center; margin-bottom: 3rem;">
+            <h1 id="site-title">読み込み中...</h1>
+            <p id="site-subtitle"></p>
+        </header>
 
-<div id="log-screen"></div>
+        <section id="news-list">
+            <!-- 記事が自動挿入されます -->
+        </section>
+    </main>
 
-<div class="monitor">
-    <div id="status-bar">
-        <span id="engine-status">READY</span>
-        <span id="mode-status" style="color: var(--accent);">ZERO-DROP OPTIMIZED</span>
-    </div>
-</div>
+    <script src="data.js"></script>
+    <script>
+        // 基本情報の反映
+        document.getElementById('site-title').textContent = cmsData.siteInfo.title;
+        document.getElementById('site-subtitle').textContent = cmsData.siteInfo.subtitle;
 
-<script>
-    let recognition = null;
-    let isActive = false;
-    let restartTimeoutId = null;
-    let multiplier = 15.0; // 初期値15.0
-
-    function resetPermissions() { window.location.reload(); }
-
-    // 感度セレクトボックスを1から100まで5刻みで生成（初期値15.0）
-    function initBoostSelect() {
-        const boostSelect = document.getElementById('boost-select');
-        boostSelect.innerHTML = '';
+        // 記事一覧の生成
+        const listContainer = document.getElementById('news-list');
         
-        const firstOpt = document.createElement('option');
-        firstOpt.value = "1.0"; firstOpt.text = "1.0";
-        boostSelect.appendChild(firstOpt);
-
-        for (let i = 5; i <= 100; i += 5) {
-            const opt = document.createElement('option');
-            opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 15) opt.selected = true; // 15.0を初期選択
-            boostSelect.appendChild(opt);
-        }
-    }
-
-    async function updateMicList() {
-        try {
-            const devs = await navigator.mediaDevices.enumerateDevices();
-            const sel = document.getElementById('mic-select');
-            const currentVal = sel.value;
-            sel.innerHTML = '';
+        cmsData.news.forEach(item => {
+            const article = document.createElement('article');
+            article.className = 'news-card';
             
-            const defOpt = document.createElement('option');
-            defOpt.value = "default"; defOpt.text = "既定のマイク";
-            sel.appendChild(defOpt);
-
-            devs.filter(d => d.kind === 'audioinput').forEach((d, i) => {
-                if (d.deviceId !== 'default') {
-                    const opt = document.createElement('option');
-                    opt.value = d.deviceId;
-                    opt.text = d.label || `マイク ${i + 1}`;
-                    sel.appendChild(opt);
-                }
-            });
-            if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
-                sel.value = currentVal;
-            }
-        } catch(e) { console.warn("マイク一覧取得スキップ:", e); }
-    }
-
-    window.onload = async function() {
-        initBoostSelect();
-        document.getElementById('btn-start').disabled = false;
-        await updateMicList();
-    };
-
-    function initRecognition() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-            document.getElementById('engine-status').innerText = "非対応ブラウザ";
-            return;
-        }
-
-        recognition = new SpeechRecognition();
-        recognition.lang = 'ja-JP';
-        recognition.interimResults = true;
-        recognition.continuous = true;
-
-        recognition.onstart = async () => {
-            document.getElementById('engine-status').innerText = "LIVE";
-            await updateMicList();
-        };
-
-        recognition.onresult = (e) => {
-            const screen = document.getElementById('log-screen');
+            // 基礎となるHTMLを作成
+            let htmlContent = `
+                <div class="meta-info">
+                    <span class="date">${item.date}</span>
+                    <span class="category">${item.category}</span>
+                </div>
+                <h3>${item.title}</h3>
+                <p>${item.content}</p>
+            `;
             
-            const oldInterim = document.getElementById('interim-live-block');
-            if (oldInterim) oldInterim.remove();
-
-            let interimText = '';
-
-            for (let i = e.resultIndex; i < e.results.length; i++) {
-                let transcript = e.results[i][0].transcript;
-                if (e.results[i].isFinal) {
-                    addFinalBlock(transcript);
-                } else {
-                    interimText += transcript;
-                }
+            // 【追加】URLが設定されている場合のみ、リンクボタンを追加する
+            if (item.url && item.url.trim() !== "") {
+                htmlContent += `
+                    <a href="${item.url}" class="button more-link" target="_blank" rel="noopener noreferrer">
+                        詳細を見る
+                    </a>
+                `;
             }
-
-            if (interimText) {
-                const interimBlock = document.createElement('div');
-                interimBlock.id = 'interim-live-block';
-                interimBlock.className = 'interim-live';
-                interimBlock.innerText = interimText;
-                screen.appendChild(interimBlock);
-                screen.scrollTop = screen.scrollHeight;
-            }
-        };
-
-        // 瞬断による文字落ちを防ぐ超高速リスタート（50msウェイト）
-        recognition.onend = () => {
-            if (isActive) {
-                clearTimeout(restartTimeoutId);
-                restartTimeoutId = setTimeout(() => {
-                    if (isActive && recognition) {
-                        try { 
-                            recognition.start(); 
-                        } catch(e) {
-                            console.warn("エンジンロック検知、強制覚醒実行");
-                            forceResetEngine();
-                        }
-                    }
-                }, 50); 
-            }
-        };
-
-        recognition.onerror = (ev) => {
-            console.warn("認識エラーハンドリング:", ev.error);
-            if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
-                try { recognition.stop(); } catch(e){}
-            } else if (ev.error === 'not-allowed') {
-                document.getElementById('engine-status').innerText = "マイク許可なし";
-                alert("マイクの使用が許可されていません。");
-            }
-        };
-    }
-
-    function forceResetEngine() {
-        if (recognition) {
-            try { recognition.abort(); } catch(e){}
-            recognition = null;
-        }
-        if (isActive) {
-            initRecognition();
-            try { recognition.start(); } catch(e){}
-        }
-    }
-
-    function addFinalBlock(text) {
-        let cleanedText = text.trim();
-        if (!cleanedText) return;
-
-        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-        cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
-        if (cleanedText === "") return;
-
-        const screen = document.getElementById('log-screen');
-        if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
-
-        const newBlock = document.createElement('div');
-        newBlock.className = 'block';
-
-        const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
-        newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
-        
-        screen.appendChild(newBlock);
-        requestAnimationFrame(() => { screen.scrollTop = screen.scrollHeight; });
-    }
-
-    document.getElementById('btn-start').onclick = async () => {
-        isActive = true;
-        document.getElementById('btn-start').disabled = true;
-        document.getElementById('btn-stop').disabled = false;
-        document.getElementById('engine-status').innerText = "CONNECTING";
-
-        try {
-            const filterActive = document.getElementById('bgm-filter').checked;
-            const streamTrigger = await navigator.mediaDevices.getUserMedia({ 
-                audio: { noiseSuppression: filterActive } 
-            });
-            streamTrigger.getTracks().forEach(t => t.stop());
-        } catch (e) { console.warn("権限プリチェック・スキップ", e); }
-
-        if (!recognition) {
-            initRecognition();
-        }
-
-        if (recognition) {
-            try {
-                multiplier = parseFloat(document.getElementById('boost-select').value);
-                recognition.start();
-            } catch (e) {
-                console.error(e);
-                forceResetEngine();
-            }
-        }
-    };
-
-    document.getElementById('btn-stop').onclick = () => {
-        isActive = false;
-        clearTimeout(restartTimeoutId);
-        document.getElementById('btn-start').disabled = false;
-        document.getElementById('btn-stop').disabled = true;
-        
-        const oldInterim = document.getElementById('interim-live-block');
-        if (oldInterim) oldInterim.remove();
-
-        if (recognition) {
-            try { recognition.stop(); } catch(e){}
-        }
-        document.getElementById('engine-status').innerText = "STOPPED";
-    };
-
-    document.getElementById('mic-select').onchange = async () => {
-        if (isActive) {
-            document.getElementById('engine-status').innerText = "RECONNECTING";
-            isActive = false;
-            clearTimeout(restartTimeoutId);
-            if (recognition) {
-                try { recognition.abort(); } catch(e){}
-                recognition = null;
-            }
-            setTimeout(() => {
-                isActive = true;
-                document.getElementById('btn-start').click();
-            }, 200);
-        }
-    };
-
-    // ノイズ除去の切り替え時も再接続
-    document.getElementById('bgm-filter').onchange = async () => {
-        if (isActive) {
-            document.getElementById('engine-status').innerText = "FILTERING";
-            isActive = false;
-            clearTimeout(restartTimeoutId);
-            if (recognition) {
-                try { recognition.abort(); } catch(e){}
-                recognition = null;
-            }
-            setTimeout(() => {
-                isActive = true;
-                document.getElementById('btn-start').click();
-            }, 200);
-        }
-    };
-
-    document.getElementById('boost-select').onchange = () => {
-        multiplier = parseFloat(document.getElementById('boost-select').value);
-    };
-
-    function clearAll() { 
-        if(!confirm("ログを削除しますか？")) return;
-        document.getElementById('log-screen').innerHTML = ''; 
-    }
-    
-    function copyAll() {
-        const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n');
-        if (!text) return;
-        navigator.clipboard.writeText(text).then(() => {
-            const originalText = document.getElementById('engine-status').innerText;
-            document.getElementById('engine-status').innerText = "COPIED!";
-            setTimeout(() => document.getElementById('engine-status').innerText = originalText, 1500);
+            
+            article.innerHTML = htmlContent;
+            listContainer.appendChild(article);
         });
-    }
-</script>
+    </script>
 </body>
 </html>
