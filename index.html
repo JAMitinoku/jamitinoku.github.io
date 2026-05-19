@@ -71,21 +71,25 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 5.0;
+    let multiplier = 15.0; // 初期値を15.0に設定
 
     function resetPermissions() { window.location.reload(); }
 
+    // 感度セレクトボックスを1から100まで5刻みで生成（初期値15.0）
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
+        
+        // ベースの1.0を最初に追加
         const firstOpt = document.createElement('option');
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
         boostSelect.appendChild(firstOpt);
 
-        for (let i = 5; i <= 50; i += 5) {
+        // 5から100まで5刻みで追加
+        for (let i = 5; i <= 100; i += 5) {
             const opt = document.createElement('option');
             opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 5) opt.selected = true;
+            if (i === 15) opt.selected = true; // 15.0をデフォルト選択
             boostSelect.appendChild(opt);
         }
     }
@@ -141,7 +145,6 @@
         recognition.onresult = (e) => {
             const screen = document.getElementById('log-screen');
             
-            // 古い未確定（作業中）表示を確実にクリア
             const oldInterim = document.getElementById('interim-live-block');
             if (oldInterim) oldInterim.remove();
 
@@ -156,7 +159,6 @@
                 }
             }
 
-            // 新しい未確定テキストがあれば最下部へリアルタイム表示
             if (interimText) {
                 const interimBlock = document.createElement('div');
                 interimBlock.id = 'interim-live-block';
@@ -167,7 +169,7 @@
             }
         };
 
-        // 【最適化】瞬断による文字落ちを防ぐ超高速リスタート（50msウェイト）
+        // 瞬断による文字落ちを防ぐ超高速リスタート（50msウェイト）
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
@@ -176,7 +178,6 @@
                         try { 
                             recognition.start(); 
                         } catch(e) {
-                            // 万が一ロックがかかった場合は一度破棄して強制再生成
                             console.warn("エンジンロック検知、強制覚醒実行");
                             forceResetEngine();
                         }
@@ -188,7 +189,6 @@
         recognition.onerror = (ev) => {
             console.warn("認識エラーハンドリング:", ev.error);
             if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
-                // 文字落ちの起点となるエラー時は速やかにストップさせてonend経由の高速リスタートに乗せる
                 try { recognition.stop(); } catch(e){}
             } else if (ev.error === 'not-allowed') {
                 document.getElementById('engine-status').innerText = "マイク許可なし";
@@ -197,7 +197,6 @@
         };
     }
 
-    // エラー固着時にエンジンを完全にクリーンにして立ち上げるセーフティ
     function forceResetEngine() {
         if (recognition) {
             try { recognition.abort(); } catch(e){}
@@ -213,7 +212,6 @@
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        // フィラー除去
         const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
@@ -239,7 +237,7 @@
 
         try {
             const streamTrigger = await navigator.mediaDevices.getUserMedia({ audio: true });
-            streamTrigger.getTracks().forEach(t => t.stop()); // 権限を叩き起こして即座にマイクを解放
+            streamTrigger.getTracks().forEach(t => t.stop());
         } catch (e) { console.warn("権限プリチェック・スキップ", e); }
 
         if (!recognition) {
@@ -272,7 +270,6 @@
         document.getElementById('engine-status').innerText = "STOPPED";
     };
 
-    // マイク切り替え時は一度安全にエンジンを完全シャットダウンしてからスマートに再起動
     document.getElementById('mic-select').onchange = async () => {
         if (isActive) {
             document.getElementById('engine-status').innerText = "RECONNECTING";
@@ -280,7 +277,7 @@
             clearTimeout(restartTimeoutId);
             if (recognition) {
                 try { recognition.abort(); } catch(e){}
-                recognition = null; // インスタンスを完全に破棄して初期化
+                recognition = null;
             }
             setTimeout(() => {
                 isActive = true;
