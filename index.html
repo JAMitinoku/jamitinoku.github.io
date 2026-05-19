@@ -67,6 +67,7 @@
 
     async function init() {
         try {
+            // 初期アクセス権確認
             const temp = await navigator.mediaDevices.getUserMedia({ audio: true });
             temp.getTracks().forEach(t => t.stop());
             await refreshDevices();
@@ -103,7 +104,6 @@
         if (cleanedText === "") return;
 
         const screen = document.getElementById('log-screen');
-        
         if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
 
         const newBlock = document.createElement('div');
@@ -119,9 +119,13 @@
         });
     }
 
-    function setupRecognition() {
+    // 【変更点①】SpeechRecognitionインスタンスの生成と初期化を完全に分離
+    function createRecognitionInstance() {
         const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!Speech) return null;
+        if (!Speech) {
+            alert("このブラウザは音声認識に対応していません。ChromeまたはSafariをお試しください。");
+            return null;
+        }
 
         const rec = new Speech();
         rec.lang = 'ja-JP';
@@ -150,37 +154,37 @@
             }
         };
 
-        // Android/Mobile向けの強力な再起動セーフティ
         rec.onend = () => {
             if (isRunning) {
                 clearTimeout(restartTimeoutId);
-                // Android Chrome特有の切断に対応するため、少し余裕を持たせた400msで安全に再帰スタート
+                // Androidの急速な切断・再接続の競合を避ける安全なマージン
                 restartTimeoutId = setTimeout(() => {
                     if (isRunning && recognition) {
                         try { 
                             recognition.start(); 
                         } catch(err) { 
-                            // 既に動いているエラー(aborted等)が出た場合は、一度破棄して再生成を試みる
-                            console.warn("再起動セーフティ作動:", err);
+                            console.warn("再起動セーフティ発動:", err);
+                            // インスタンスがロックされた場合は、ユーザーインタラクション外でも再生成して即時復活させる
                             if (isRunning) {
-                                try { recognition.abort(); } catch(e){}
-                                setupRecognition();
+                                recognition = createRecognitionInstance();
                                 if (recognition) recognition.start();
                             }
                         }
                     }
-                }, 400);
+                }, 350);
             }
         };
 
         rec.onerror = (ev) => {
-            // Android特有の頻発するエラー（no-speechやaborted）はユーザーに見せずバックグラウンドで処理
+            // no-speechやabortedはスマホで高頻度で発生する正常なライフサイクルの一部。エラー扱いにしない
+            if (ev.error === 'network') {
+                document.getElementById('engine-status').innerText = "NET ERROR";
+            }
             if (ev.error !== 'no-speech' && ev.error !== 'aborted') {
                 console.warn("認識エラー:", ev.error);
             }
         };
 
-        recognition = rec;
         return rec;
     }
 
@@ -195,40 +199,47 @@
             try { recognition.abort(); } catch(e){}
             recognition = null;
         }
-        if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); stream = null; }
+        if (stream) { 
+            stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); 
+            stream = null; 
+        }
     }
 
-    async function startStream() {
-        const deviceId = document.getElementById('mic-select').value;
-        const filterActive = document.getElementById('bgm-filter').checked;
-
-        const constraints = {
-            audio: {
-                deviceId: deviceId ? { exact: deviceId } : undefined,
-                echoCancellation: true,
-                noiseSuppression: filterActive,
-                autoGainControl: true
-            }
-        };
-
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        await refreshDevices();
-
-        const rec = setupRecognition();
-        if (rec) rec.start();
-    }
-
-    document.getElementById('btn-start').onclick = async () => {
+    // 【変更点②】クリックイベントから直接（同期処理で）start()を呼び出すロジックに大改造
+    document.getElementById('btn-start').onclick = function() {
         try {
             document.getElementById('btn-start').disabled = true;
             document.getElementById('engine-status').innerText = "CONNECTING";
             isRunning = true;
             
-            await startStream();
-            
-            document.getElementById('btn-stop').disabled = false;
+            // 1. スマホのセキュリティを突破するため、クリックされたこの瞬間に最優先でインスタンス化して起動！
+            recognition = createRecognitionInstance();
+            if (!recognition) return;
+            recognition.start();
+
+            // 2. 音声認識が「走り始めたあと」に、バックグラウンドでマイクストリームの初期化やデバイス更新を行う（非同期）
+            const deviceId = document.getElementById('mic-select').value;
+            const filterActive = document.getElementById('bgm-filter').checked;
+            const constraints = {
+                audio: {
+                    deviceId: deviceId ? { exact: deviceId } : undefined,
+                    echoCancellation: true,
+                    noiseSuppression: filterActive,
+                    autoGainControl: true
+                }
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints).then(s => {
+                stream = s;
+                refreshDevices();
+                document.getElementById('btn-stop').disabled = false;
+            }).catch(err => {
+                console.error("マイクストリーム取得失敗:", err);
+                // マイクストリームが取れなくても、Web Speech API単体で動くスマホが多いため、あえて即時停止せず継続させる
+            });
+
         } catch (err) {
-            console.error(err);
+            console.error("起動エラー:", err);
             document.getElementById('engine-status').innerText = "ERROR";
             document.getElementById('btn-start').disabled = false;
             isRunning = false;
@@ -249,7 +260,8 @@
             document.getElementById('engine-status').innerText = "RECONNECTING";
             await stopMedia();
             isRunning = true;
-            await startStream();
+            // 変更時の擬似クリック発火
+            document.getElementById('btn-start').click();
         }
     };
 
@@ -258,7 +270,7 @@
             document.getElementById('engine-status').innerText = "FILTERING";
             await stopMedia();
             isRunning = true;
-            await startStream();
+            document.getElementById('btn-start').click();
         }
     };
 
