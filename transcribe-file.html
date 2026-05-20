@@ -20,11 +20,16 @@
         #btn-stop { background: var(--danger); color: white; border: none; }
         
         /* 再生コントロール用のスタイル */
-        .playback-panel { display: flex; align-items: center; gap: 8px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .playback-panel { display: flex; align-items: center; gap: 8px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
         .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
         input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
+        /* ボリューム調整用の微調整 */
+        .vol-group { display: flex; align-items: center; gap: 4px; }
+        .vol-group input[type="range"] { width: 70px; }
+        .vol-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 30px; }
+
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
         .action-group { margin-left: auto; display: flex; gap: 8px; }
@@ -68,6 +73,12 @@
                 <option value="2.0">2.0x</option>
             </select>
         </div>
+
+        <div class="tool-group vol-group">
+            <label>音量:</label>
+            <input type="range" id="volume-bar" value="100" min="0" max="100">
+            <span class="vol-text" id="volume-show">100%</span>
+        </div>
     </div>
 
     <button id="btn-start" disabled>文字起こし開始</button>
@@ -96,6 +107,7 @@
     
     let audioCtx = null;
     let sourceNode = null;
+    let gainNode = null; // 音量調整用ノードを追加
     let destNode = null;
 
     const fileInput = document.getElementById('file-input');
@@ -108,6 +120,8 @@
     const seekBar = document.getElementById('seek-bar');
     const timeShow = document.getElementById('time-show');
     const speedSelect = document.getElementById('speed-select');
+    const volumeBar = document.getElementById('volume-bar');
+    const volumeShow = document.getElementById('volume-show');
 
     // ファイル選択時
     fileInput.onchange = (e) => {
@@ -167,6 +181,17 @@
     // 再生速度の変更
     speedSelect.onchange = () => {
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
+    };
+
+    // 音量スライダーの変更処理
+    volumeBar.oninput = () => {
+        const volumeValue = volumeBar.value;
+        volumeShow.innerText = volumeValue + "%";
+        
+        // Web Audio APIのGainNodeに値を反映 (0.0 〜 1.0)
+        if (gainNode) {
+            gainNode.gain.value = parseInt(volumeValue) / 100;
+        }
     };
 
     // 時間表示のフォーマット関数 (mm:ss)
@@ -273,9 +298,19 @@
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             sourceNode = audioCtx.createMediaElementSource(mediaPreview);
+            
+            // 音量調整用のGainNodeを作成
+            gainNode = audioCtx.createGain();
+            // 現在のスライダーの値を初期音量として適用
+            gainNode.gain.value = parseInt(volumeBar.value) / 100;
+
             destNode = audioCtx.createMediaStreamDestination();
+            
+            // ルーティング: source -> gainNode -> スピーカー(destination)
+            // (文字起こし側へは、音量を絞っても認識できるようにsourceNodeから直接分岐させて接続します)
             sourceNode.connect(destNode);
-            sourceNode.connect(audioCtx.destination);
+            sourceNode.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
         }
 
         if (!recognition) {
