@@ -83,8 +83,7 @@
 
         <div class="tool-group vol-group">
             <label>音量:</label>
-            <input type="range" id="volume-bar" value="100" min="0" max="200">
-            <span class="vol-text" id="volume-show">100%</span>
+            <input type="range" id="volume-bar" value="100" min="0" max="300"> <span class="vol-text" id="volume-show">100%</span>
         </div>
 
         <div class="tool-group boost-group">
@@ -137,7 +136,7 @@
     let boostNode = null; 
     let destNode = null;
     
-    // 【新規】可視化用ノードと設定
+    // 可視化用ノードと設定
     let analyserMeter = null;  // 全体音量計測用
     let analyserBoost = null;  // ブースト後波形用
     let drawVisualId = null;
@@ -157,7 +156,7 @@
     const boostSlider = document.getElementById('boost-slider'); 
     const boostShow = document.getElementById('boost-show');
 
-    // 新規UI要素
+    // UI要素
     const levelMeterBar = document.getElementById('level-meter-bar');
     const waveformCanvas = document.getElementById('waveform-canvas');
     const canvasCtx = waveformCanvas.getContext('2d');
@@ -219,7 +218,7 @@
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
     };
 
-    // 音量スライダーの変更処理（自分が聴く用・最大200%）
+    // 音量スライダーの変更処理（最大300%）
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -274,7 +273,6 @@
                 sumSquares += norm * norm;
             }
             const rms = Math.sqrt(sumSquares / bufferLengthMeter);
-            // 音量バーの幅にマッピング (RMS 0〜0.4程度を0〜100%に変換)
             let levelPercent = Math.min(100, Math.floor(rms * 250));
             levelMeterBar.style.width = levelPercent + '%';
 
@@ -284,7 +282,7 @@
             canvasCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
             
             canvasCtx.lineWidth = 1.5;
-            canvasCtx.strokeStyle = '#ffad33'; // 感度ブースト色に合わせる
+            canvasCtx.strokeStyle = '#ffad33'; 
             canvasCtx.beginPath();
 
             const sliceWidth = waveformCanvas.width * 1.0 / bufferLengthBoost;
@@ -410,20 +408,15 @@
             boostNode = audioCtx.createGain();
             boostNode.gain.value = parseFloat(boostSlider.value);
 
-            // 3. 【新規】アナライザーノードの設置
-            analyserMeter = audioCtx.createAnalyser(); // 全体音量用
+            // 3. アナライザーノードの設置
+            analyserMeter = audioCtx.createAnalyser(); 
             analyserMeter.fftSize = 256;
             
-            analyserBoost = audioCtx.createAnalyser(); // ブースト波形用
+            analyserBoost = audioCtx.createAnalyser(); 
             analyserBoost.fftSize = 256;
 
             destNode = audioCtx.createMediaStreamDestination();
             
-            /* [拡張オーディオ・ルーティング構造]
-              sourceNode (元音声) ──> analyserMeter (元音量計測)
-                ├──> gainNode (音量調整) ──> audioCtx.destination (スピーカー出力)
-                └──> boostNode (感度増幅) ──> analyserBoost (波形計測) ──> destNode (文字起こしへ)
-            */
             sourceNode.connect(analyserMeter);
             
             sourceNode.connect(gainNode);
@@ -433,7 +426,6 @@
             boostNode.connect(analyserBoost);
             analyserBoost.connect(destNode);
 
-            // キャンバスの解像度初期化
             waveformCanvas.width = waveformCanvas.clientWidth;
             waveformCanvas.height = waveformCanvas.clientHeight;
         }
@@ -451,7 +443,6 @@
             recognition.start();
             mediaPreview.play(); 
             
-            // ビジュアル描画の開始
             startVisualizer();
         } catch (e) {
             console.error(e);
@@ -482,7 +473,6 @@
             try { recognition.stop(); } catch(e){}
         }
         
-        // メーターリセット
         if (levelMeterBar) levelMeterBar.style.width = '0%';
     }
 
