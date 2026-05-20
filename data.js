@@ -7,11 +7,11 @@ const cmsData = {
   news: [
     {
       id: 3,
-      date: "",
-      category: "",
-      title: "",
-      content: "",
-      url: "" // ← リンクがない場合は空欄にするだけ
+      date: "2026年05月20日",
+      category: "管理",
+      title: "録音ファイルから文字起こし",
+      content: "音声を再生しながら、文字起こし（編集可）",
+      url: "https://jamitinoku.github.io/transcribe-file.html" // ← リンクがない場合は空欄にするだけ
     },
     {
       id: 2,
