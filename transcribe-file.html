@@ -20,7 +20,7 @@
         #btn-stop { background: var(--danger); color: white; border: none; }
         
         /* 再生コントロール用のスタイル */
-        .playback-panel { display: flex; align-items: center; gap: 8px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
+        .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
         .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
         input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
@@ -79,6 +79,17 @@
             <input type="range" id="volume-bar" value="100" min="0" max="100">
             <span class="vol-text" id="volume-show">100%</span>
         </div>
+
+        <div class="tool-group">
+            <label style="color: #ffad33; font-weight: bold;">感度ブースト:</label>
+            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33;">
+                <option value="1.0" selected>標準 (1.0x)</option>
+                <option value="1.5">1.5倍</option>
+                <option value="2.0">2.0倍</option>
+                <option value="3.0">3.0倍</option>
+                <option value="4.0">4.0倍</option>
+            </select>
+        </div>
     </div>
 
     <button id="btn-start" disabled>文字起こし開始</button>
@@ -96,7 +107,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">ファイルを選択してください</span>
-        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED</span>
+        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED + BOOST</span>
     </div>
 </div>
 
@@ -107,7 +118,8 @@
     
     let audioCtx = null;
     let sourceNode = null;
-    let gainNode = null; // 音量調整用ノードを追加
+    let gainNode = null; 
+    let boostNode = null; // 【新規】文字起こしエンジン向けの感度ブースト用ノード
     let destNode = null;
 
     const fileInput = document.getElementById('file-input');
@@ -122,6 +134,7 @@
     const speedSelect = document.getElementById('speed-select');
     const volumeBar = document.getElementById('volume-bar');
     const volumeShow = document.getElementById('volume-show');
+    const boostSelect = document.getElementById('boost-select'); // 【新規】
 
     // ファイル選択時
     fileInput.onchange = (e) => {
@@ -151,7 +164,6 @@
     // 再生位置が更新されたとき（シークバーと時間の同期）
     mediaPreview.ontimeupdate = () => {
         if (!mediaPreview.duration) return;
-        // ユーザーがシークバーをドラッグ中でなければ値を更新
         if (!seekBar.dataset.dragging) {
             const progress = (mediaPreview.currentTime / mediaPreview.duration) * 100;
             seekBar.value = progress;
@@ -168,11 +180,9 @@
         if (!mediaPreview.duration) return;
         const newTime = (seekBar.value / 100) * mediaPreview.duration;
         
-        // 再生位置を変更
         mediaPreview.currentTime = newTime;
         seekBar.removeAttribute('data-dragging');
 
-        // もし文字起こし稼働中なら、インラインでの文字ズレを防ぐためエンジンを強制リセット
         if (isActive) {
             forceResetEngine();
         }
@@ -183,14 +193,19 @@
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
     };
 
-    // 音量スライダーの変更処理
+    // 音量スライダーの変更処理（自分が聴く用）
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
-        
-        // Web Audio APIのGainNodeに値を反映 (0.0 〜 1.0)
         if (gainNode) {
             gainNode.gain.value = parseInt(volumeValue) / 100;
+        }
+    };
+
+    // 【新規】感度ブーストの変更処理（文字起こしエンジンに送る用）
+    boostSelect.onchange = () => {
+        if (boostNode) {
+            boostNode.gain.value = parseFloat(boostSelect.value);
         }
     };
 
@@ -299,18 +314,26 @@
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             sourceNode = audioCtx.createMediaElementSource(mediaPreview);
             
-            // 音量調整用のGainNodeを作成
+            // 1. 自分が聴く用の音量ノード
             gainNode = audioCtx.createGain();
-            // 現在のスライダーの値を初期音量として適用
             gainNode.gain.value = parseInt(volumeBar.value) / 100;
+
+            // 2. 【新規】文字起こしエンジンに送る用の感度ブーストノード
+            boostNode = audioCtx.createGain();
+            boostNode.gain.value = parseFloat(boostSelect.value);
 
             destNode = audioCtx.createMediaStreamDestination();
             
-            // ルーティング: source -> gainNode -> スピーカー(destination)
-            // (文字起こし側へは、音量を絞っても認識できるようにsourceNodeから直接分岐させて接続します)
-            sourceNode.connect(destNode);
+            /* [オーディオ・ルーティング構造]
+              sourceNode (元音声) 
+                ├──> gainNode (音量調整) ──> audioCtx.destination (スピーカー出力)
+                └──> boostNode (感度増幅) ──> destNode (文字起こしエンジンへ)
+            */
             sourceNode.connect(gainNode);
             gainNode.connect(audioCtx.destination);
+
+            sourceNode.connect(boostNode);
+            boostNode.connect(destNode);
         }
 
         if (!recognition) {
@@ -321,7 +344,6 @@
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
-            // 選択されている再生速度を適用
             mediaPreview.playbackRate = parseFloat(speedSelect.value);
             
             recognition.start();
