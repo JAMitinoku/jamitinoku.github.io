@@ -12,7 +12,7 @@
         .tool-group { display: flex; align-items: center; gap: 6px; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
         
-        button, select, input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        button, select, input[type="range"], input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
         input[type="file"] { max-width: 150px; font-size: 11px; padding: 5px; }
         button:disabled { opacity: 0.4; cursor: not-allowed; }
         
@@ -22,13 +22,20 @@
         /* 再生コントロール用のスタイル */
         .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
         .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
-        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; padding: 0; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
-        /* ボリューム調整用の微調整 */
-        .vol-group { display: flex; align-items: center; gap: 4px; }
-        .vol-group input[type="range"] { width: 70px; }
-        .vol-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 30px; }
+        /* ボリューム・ブースト調整の微調整 */
+        .vol-group, .boost-group { display: flex; align-items: center; gap: 4px; }
+        .vol-group input[type="range"] { width: 80px; }
+        .boost-group input[type="range"] { width: 90px; border-color: #ffad33; }
+        .vol-text, .boost-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
+
+        /* ビジュアルモニター（メーターと波形） */
+        .visualizer-group { display: flex; align-items: center; gap: 8px; background: #11141a; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
+        .meter-container { width: 60px; height: 12px; background: #222; border-radius: 2px; overflow: hidden; position: relative; border: 1px solid #444; }
+        .meter-bar { width: 0%; height: 100%; background: linear-gradient(to right, #238636 70%, #ffad33 85%, #f85149 100%); transition: width 0.05s linear; }
+        .v-canvas { width: 100px; height: 24px; background: #000; border-radius: 3px; border: 1px solid #333; }
 
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
@@ -76,19 +83,27 @@
 
         <div class="tool-group vol-group">
             <label>音量:</label>
-            <input type="range" id="volume-bar" value="100" min="0" max="100">
+            <input type="range" id="volume-bar" value="100" min="0" max="200">
             <span class="vol-text" id="volume-show">100%</span>
         </div>
 
-        <div class="tool-group">
+        <div class="tool-group boost-group">
             <label style="color: #ffad33; font-weight: bold;">感度ブースト:</label>
-            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33;">
-                <option value="1.0" selected>標準 (1.0x)</option>
-                <option value="1.5">1.5倍</option>
-                <option value="2.0">2.0倍</option>
-                <option value="3.0">3.0倍</option>
-                <option value="4.0">4.0倍</option>
-            </select>
+            <input type="range" id="boost-slider" value="1" min="1" max="10" step="1" style="accent-color: #ffad33;">
+            <span class="boost-text" id="boost-show" style="color: #ffad33; font-weight: bold; font-family: monospace; font-size: 11px;">1倍</span>
+        </div>
+
+        <div class="visualizer-group">
+            <div class="tool-group">
+                <label style="font-size: 9px;">レベル:</label>
+                <div class="meter-container">
+                    <div id="level-meter-bar" class="meter-bar"></div>
+                </div>
+            </div>
+            <div class="tool-group">
+                <label style="font-size: 9px;">感度波形:</label>
+                <canvas id="waveform-canvas" class="v-canvas"></canvas>
+            </div>
         </div>
     </div>
 
@@ -107,7 +122,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">ファイルを選択してください</span>
-        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED + BOOST</span>
+        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED + BOOST VISUALIZED</span>
     </div>
 </div>
 
@@ -119,8 +134,13 @@
     let audioCtx = null;
     let sourceNode = null;
     let gainNode = null; 
-    let boostNode = null; // 【新規】文字起こしエンジン向けの感度ブースト用ノード
+    let boostNode = null; 
     let destNode = null;
+    
+    // 【新規】可視化用ノードと設定
+    let analyserMeter = null;  // 全体音量計測用
+    let analyserBoost = null;  // ブースト後波形用
+    let drawVisualId = null;
 
     const fileInput = document.getElementById('file-input');
     const mediaPreview = document.getElementById('media-preview');
@@ -134,7 +154,13 @@
     const speedSelect = document.getElementById('speed-select');
     const volumeBar = document.getElementById('volume-bar');
     const volumeShow = document.getElementById('volume-show');
-    const boostSelect = document.getElementById('boost-select'); // 【新規】
+    const boostSlider = document.getElementById('boost-slider'); 
+    const boostShow = document.getElementById('boost-show');
+
+    // 新規UI要素
+    const levelMeterBar = document.getElementById('level-meter-bar');
+    const waveformCanvas = document.getElementById('waveform-canvas');
+    const canvasCtx = waveformCanvas.getContext('2d');
 
     // ファイル選択時
     fileInput.onchange = (e) => {
@@ -193,7 +219,7 @@
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
     };
 
-    // 音量スライダーの変更処理（自分が聴く用）
+    // 音量スライダーの変更処理（自分が聴く用・最大200%）
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -202,10 +228,12 @@
         }
     };
 
-    // 【新規】感度ブーストの変更処理（文字起こしエンジンに送る用）
-    boostSelect.onchange = () => {
+    // 感度ブーストの変更処理（1〜10倍・1刻み）
+    boostSlider.oninput = () => {
+        const boostValue = boostSlider.value;
+        boostShow.innerText = boostValue + "倍";
         if (boostNode) {
-            boostNode.gain.value = parseFloat(boostSelect.value);
+            boostNode.gain.value = parseFloat(boostValue);
         }
     };
 
@@ -219,6 +247,66 @@
 
     function updateTimeDisplay() {
         timeShow.innerText = `${formatTime(mediaPreview.currentTime)} / ${formatTime(mediaPreview.duration)}`;
+    }
+
+    // リアルタイム描画処理（レベルメーター＆波形グラフ）
+    function startVisualizer() {
+        if (!analyserMeter || !analyserBoost) return;
+
+        const bufferLengthMeter = analyserMeter.fftSize;
+        const dataArrayMeter = new Uint8Array(bufferLengthMeter);
+
+        const bufferLengthBoost = analyserBoost.frequencyBinCount;
+        const dataArrayBoost = new Uint8Array(bufferLengthBoost);
+
+        const draw = () => {
+            if (!isActive) {
+                levelMeterBar.style.width = '0%';
+                return;
+            }
+            drawVisualId = requestAnimationFrame(draw);
+
+            // 1. 音量レベルゲージの計算 (RMS値ベース)
+            analyserMeter.getByteTimeDomainData(dataArrayMeter);
+            let sumSquares = 0;
+            for (let i = 0; i < bufferLengthMeter; i++) {
+                const norm = (dataArrayMeter[i] - 128) / 128;
+                sumSquares += norm * norm;
+            }
+            const rms = Math.sqrt(sumSquares / bufferLengthMeter);
+            // 音量バーの幅にマッピング (RMS 0〜0.4程度を0〜100%に変換)
+            let levelPercent = Math.min(100, Math.floor(rms * 250));
+            levelMeterBar.style.width = levelPercent + '%';
+
+            // 2. 感度波形グラフの描画 (ブースト後の音声データ)
+            analyserBoost.getByteTimeDomainData(dataArrayBoost);
+            canvasCtx.fillStyle = '#000000';
+            canvasCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+            
+            canvasCtx.lineWidth = 1.5;
+            canvasCtx.strokeStyle = '#ffad33'; // 感度ブースト色に合わせる
+            canvasCtx.beginPath();
+
+            const sliceWidth = waveformCanvas.width * 1.0 / bufferLengthBoost;
+            let x = 0;
+
+            for (let i = 0; i < bufferLengthBoost; i++) {
+                const v = dataArrayBoost[i] / 128.0;
+                const y = v * waveformCanvas.height / 2;
+
+                if (i === 0) {
+                    canvasCtx.moveTo(x, y);
+                } else {
+                    canvasCtx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+
+            canvasCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 2);
+            canvasCtx.stroke();
+        };
+
+        draw();
     }
 
     function initRecognition() {
@@ -318,22 +406,36 @@
             gainNode = audioCtx.createGain();
             gainNode.gain.value = parseInt(volumeBar.value) / 100;
 
-            // 2. 【新規】文字起こしエンジンに送る用の感度ブーストノード
+            // 2. 文字起こしエンジンに送る用の感度ブーストノード
             boostNode = audioCtx.createGain();
-            boostNode.gain.value = parseFloat(boostSelect.value);
+            boostNode.gain.value = parseFloat(boostSlider.value);
+
+            // 3. 【新規】アナライザーノードの設置
+            analyserMeter = audioCtx.createAnalyser(); // 全体音量用
+            analyserMeter.fftSize = 256;
+            
+            analyserBoost = audioCtx.createAnalyser(); // ブースト波形用
+            analyserBoost.fftSize = 256;
 
             destNode = audioCtx.createMediaStreamDestination();
             
-            /* [オーディオ・ルーティング構造]
-              sourceNode (元音声) 
+            /* [拡張オーディオ・ルーティング構造]
+              sourceNode (元音声) ──> analyserMeter (元音量計測)
                 ├──> gainNode (音量調整) ──> audioCtx.destination (スピーカー出力)
-                └──> boostNode (感度増幅) ──> destNode (文字起こしエンジンへ)
+                └──> boostNode (感度増幅) ──> analyserBoost (波形計測) ──> destNode (文字起こしへ)
             */
+            sourceNode.connect(analyserMeter);
+            
             sourceNode.connect(gainNode);
             gainNode.connect(audioCtx.destination);
 
             sourceNode.connect(boostNode);
-            boostNode.connect(destNode);
+            boostNode.connect(analyserBoost);
+            analyserBoost.connect(destNode);
+
+            // キャンバスの解像度初期化
+            waveformCanvas.width = waveformCanvas.clientWidth;
+            waveformCanvas.height = waveformCanvas.clientHeight;
         }
 
         if (!recognition) {
@@ -348,6 +450,9 @@
             
             recognition.start();
             mediaPreview.play(); 
+            
+            // ビジュアル描画の開始
+            startVisualizer();
         } catch (e) {
             console.error(e);
             forceResetEngine();
@@ -363,6 +468,7 @@
     function stopTranscribing() {
         isActive = false;
         clearTimeout(restartTimeoutId);
+        cancelAnimationFrame(drawVisualId);
         btnStart.disabled = false;
         btnStop.disabled = true;
         fileInput.disabled = false;
@@ -375,6 +481,9 @@
         if (recognition) {
             try { recognition.stop(); } catch(e){}
         }
+        
+        // メーターリセット
+        if (levelMeterBar) levelMeterBar.style.width = '0%';
     }
 
     function addFinalBlock(text) {
