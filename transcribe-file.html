@@ -31,6 +31,10 @@
         .boost-group input[type="range"] { width: 90px; border-color: #ffad33; }
         .vol-text, .boost-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
 
+        /* チェックボックスの微調整 */
+        .filler-group { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; user-select: none; }
+        .filler-group input[type="checkbox"] { cursor: pointer; margin: 0; width: 14px; height: 14px; }
+
         /* ビジュアルモニター（メーターと波形） */
         .visualizer-group { display: flex; align-items: center; gap: 8px; background: #11141a; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
         .meter-container { width: 60px; height: 12px; background: #222; border-radius: 2px; overflow: hidden; position: relative; border: 1px solid #444; }
@@ -83,7 +87,8 @@
 
         <div class="tool-group vol-group">
             <label>音量:</label>
-            <input type="range" id="volume-bar" value="100" min="0" max="300"> <span class="vol-text" id="volume-show">100%</span>
+            <input type="range" id="volume-bar" value="100" min="0" max="300">
+            <span class="vol-text" id="volume-show">100%</span>
         </div>
 
         <div class="tool-group boost-group">
@@ -91,6 +96,11 @@
             <input type="range" id="boost-slider" value="1" min="1" max="10" step="1" style="accent-color: #ffad33;">
             <span class="boost-text" id="boost-show" style="color: #ffad33; font-weight: bold; font-family: monospace; font-size: 11px;">1倍</span>
         </div>
+
+        <label class="filler-group">
+            <input type="checkbox" id="filler-check" checked>
+            <span>フィラー削除</span>
+        </label>
 
         <div class="visualizer-group">
             <div class="tool-group">
@@ -155,6 +165,7 @@
     const volumeShow = document.getElementById('volume-show');
     const boostSlider = document.getElementById('boost-slider'); 
     const boostShow = document.getElementById('boost-show');
+    const fillerCheck = document.getElementById('filler-check'); // フィラー用チェックボックス
 
     // UI要素
     const levelMeterBar = document.getElementById('level-meter-bar');
@@ -480,8 +491,12 @@
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-        cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
+        // 【機能変更】フィラー削除がオンの場合のみ置換処理を実行
+        if (fillerCheck.checked) {
+            const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
+            cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
+        }
+        
         if (cleanedText === "") return;
 
         const screen = document.getElementById('log-screen');
