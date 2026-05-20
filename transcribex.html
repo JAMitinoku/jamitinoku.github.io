@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高精度・超軽量 文字起こしツール (原点回帰・軽量版 - 安定化済)</title>
+    <title>高精度・超軽量 文字起こしツール (原点回帰・軽量版 - ブースト＆DL機能付)</title>
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -14,6 +14,7 @@
             --success: #198754;
             --danger: #dc3545;
             --warning: #ffc107;
+            --info: #0dcaf0;
         }
 
         * {
@@ -73,6 +74,8 @@
 
         #btnStart { background: var(--success); color: white; border: none; }
         #btnStop { background: var(--danger); color: white; border: none; }
+        #btnDownload { background: var(--primary); color: white; border: none; }
+        #btnDownload:hover { background: #0b5ed7; }
         
         #statusBadge {
             padding: 4px 8px;
@@ -177,13 +180,24 @@
             <button id="btnStart">開始</button>
             <button id="btnStop" disabled>停止</button>
             <button id="btnCopy">コピー</button>
+            <button id="btnDownload">保存 (DL)</button>
             <button id="btnClear">クリア</button>
         </div>
 
         <div class="select-group">
-            <label for="deviceSelect" style="font-size: 12px;">入力デバイス選択:</label>
-            <select id="deviceSelect" style="max-width: 200px;"></select>
-            <button id="btnResetDevice">デバイスリセット</button>
+            <label for="deviceSelect" style="font-size: 12px;">入力デバイス:</label>
+            <select id="deviceSelect" style="max-width: 180px;"></select>
+            <button id="btnResetDevice">リセット</button>
+        </div>
+
+        <div class="select-group">
+            <label for="boostSelect" style="font-size: 12px;">マイクブースト:</label>
+            <select id="boostSelect">
+                <option value="1" selected>1倍 (標準)</option>
+                <option value="2">2倍</option>
+                <option value="3">3倍</option>
+                <option value="5">5倍</option>
+            </select>
         </div>
 
         <div class="select-group">
@@ -192,7 +206,7 @@
         </div>
 
         <div class="gauge-group">
-            <span style="font-size: 12px;">感度レベル:</span>
+            <span style="font-size: 12px;">レベル:</span>
             <div class="gauge-container">
                 <div id="sensitivityGauge"></div>
                 <div id="thresholdMarker"></div>
@@ -224,9 +238,11 @@
     const btnStart = document.getElementById('btnStart');
     const btnStop = document.getElementById('btnStop');
     const btnCopy = document.getElementById('btnCopy');
+    const btnDownload = document.getElementById('btnDownload');
     const btnClear = document.getElementById('btnClear');
     const btnResetDevice = document.getElementById('btnResetDevice');
     const deviceSelect = document.getElementById('deviceSelect');
+    const boostSelect = document.getElementById('boostSelect');
     const sensitivitySelect = document.getElementById('sensitivitySelect');
     const sensitivityGauge = document.getElementById('sensitivityGauge');
     const thresholdMarker = document.getElementById('thresholdMarker');
@@ -239,10 +255,11 @@
     let isActive = false; 
     let audioContext = null;
     let audioSource = null;
+    let gainNode = null; // ブースト機能用のゲインノード
     let analyser = null;
     let animationFrameId = null;
     let currentStream = null;
-    let reconnectTimeoutId = null; // 安全な再接続管理用のタイマーID
+    let reconnectTimeoutId = null;
 
     // 感度選択のプルダウン生成
     for (let i = 1; i <= 100; i++) {
@@ -305,9 +322,17 @@
             
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             audioSource = audioContext.createMediaStreamSource(currentStream);
+            
+            // 【ブースト機能】GainNodeの作成と接続
+            gainNode = audioContext.createGain();
+            gainNode.gain.value = parseFloat(boostSelect.value); // 初期設定倍率
+
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
-            audioSource.connect(analyser);
+
+            // ストリーム -> ゲイン(増幅) -> アナライザーの順で接続
+            audioSource.connect(gainNode);
+            gainNode.connect(analyser);
 
             const bufferLength = analyser.frequencyBinCount;
             const dataArray = new Uint8Array(bufferLength);
@@ -318,6 +343,14 @@
             };
             sensitivitySelect.onchange = updateMarker;
             updateMarker();
+
+            // リアルタイムでのブースト倍率変更に対応
+            boostSelect.onchange = () => {
+                if (gainNode) {
+                    gainNode.gain.value = parseFloat(boostSelect.value);
+                    log(`マイクブーストを ${boostSelect.value} 倍に変更しました。`);
+                }
+            };
 
             function drawGauge() {
                 if (!isActive) {
@@ -350,7 +383,6 @@
         }
     }
 
-    // 音声認識ロジック（無限ループ・多重登録によるクラッシュ回避対策版）
     function initSpeechRecognition() {
         if (recognition) {
             try { recognition.abort(); } catch(e) {}
@@ -370,7 +402,6 @@
             if (event.error === 'no-speech') return; 
             log(`音声認識エラーを検出: ${event.error}`);
             
-            // 権限エラーやサービス拒否など、再起動しても解決しない致命的エラー時は安全に強制停止
             if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
                 log("致命的なエラーのため、自動再接続を安全に停止します。");
                 btnStop.click();
@@ -378,12 +409,10 @@
         };
 
         recognition.onend = () => {
-            // 既存のタイマーがあれば重複防止のためにクリア
             if (reconnectTimeoutId) clearTimeout(reconnectTimeoutId);
 
             if (isActive) {
                 updateStatus('再接続中');
-                // 10msから250msに緩和。ブラウザの処理落ちやAPI暴走によるタブクラッシュを完全に防ぐ
                 reconnectTimeoutId = setTimeout(() => {
                     if (isActive && recognition) {
                         try { 
@@ -460,7 +489,6 @@
         btnStop.disabled = true;
         deviceSelect.disabled = false;
         
-        // 停止時は再接続タイマーを確実に抹殺
         if (reconnectTimeoutId) {
             clearTimeout(reconnectTimeoutId);
             reconnectTimeoutId = null;
@@ -488,6 +516,38 @@
         }).catch(err => {
             log("コピー処理に失敗しました: " + err);
         });
+    });
+
+    // 【認識結果ダウンロード機能】
+    btnDownload.addEventListener('click', () => {
+        const text = finalArea.innerText;
+        if (!text) {
+            log("保存するテキストがありません。");
+            alert("確定エリアにテキストがありません。");
+            return;
+        }
+
+        // 現在日時からファイル名を生成 (例: transcribe_20260521_123456.txt)
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        const filename = `transcribe_${yyyy}${mm}${dd}_${hh}${min}${ss}.txt`;
+
+        // Blobオブジェクトを作成してダウンロードリンクをトリガー
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        log(`ファイルをダウンロードしました: ${filename}`);
     });
 
     btnClear.addEventListener('click', () => {
