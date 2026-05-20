@@ -126,7 +126,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">ファイルを選択してください</span>
-        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED + BOOST VISUALIZED</span>
+        <span id="mode-status" style="color: var(--accent);">FILE-MIC HYBRID OPTIMIZED (MOBILE FIX)</span>
     </div>
 </div>
 
@@ -134,17 +134,16 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let lastProcessedIndex = -1; // 【多重表示対策】確定データのインデックス管理用
+    let lastProcessedIndex = -1; 
     
     let audioCtx = null;
     let sourceNode = null;
     let gainNode = null; 
     let boostNode = null; 
-    let destNode = null;
-    
     let analyserMeter = null;  
     let analyserBoost = null;  
     let drawVisualId = null;
+    let micStream = null; // スマホ対応用マイクストリーム
 
     const fileInput = document.getElementById('file-input');
     const mediaPreview = document.getElementById('media-preview');
@@ -229,6 +228,7 @@
         const boostValue = boostSlider.value;
         boostShow.innerText = boostValue + "倍";
         if (boostNode) {
+            // スライダーを動かした際のオーディオノード連携は維持
             boostNode.gain.value = parseFloat(boostValue);
         }
     };
@@ -314,7 +314,7 @@
 
         recognition.onstart = () => {
             engineStatus.innerText = "PROCESSING (文字起こし中...)";
-            lastProcessedIndex = -1; // 開始時に初期化
+            lastProcessedIndex = -1; 
         };
 
         recognition.onresult = (e) => {
@@ -327,7 +327,6 @@
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
                 if (e.results[i].isFinal) {
-                    // 【多重表示対策】スマホ・ブラウザの重複バグを防ぐガードを導入
                     if (i > lastProcessedIndex) {
                         addFinalBlock(transcript);
                         lastProcessedIndex = i;
@@ -347,7 +346,6 @@
             }
         };
 
-        // スマホや低スペック端末でのリスタート安全マージン（200ms）
         recognition.onend = () => {
             if (isActive && !mediaPreview.paused && !mediaPreview.ended) {
                 clearTimeout(restartTimeoutId);
@@ -363,6 +361,8 @@
             console.warn("認識エラー:", ev.error);
             if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
                 try { recognition.stop(); } catch(e){}
+            } else if (ev.error === 'not-allowed') {
+                alert("マイクの使用許可がないためスマホでのファイル起こしが起動できません。設定をご確認ください。");
             }
         };
     }
@@ -394,6 +394,15 @@
         fileInput.disabled = true;
         engineStatus.innerText = "CONNECTING";
 
+        // 【スマホ対応のコア修正】
+        // スマホで文字起こしを遮断されないよう、一度本物のマイク権限をリクエストして
+        // 音声認識エンジン（SpeechRecognition）のルートを正常に開通させます。
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch(e) {
+            console.warn("マイクアクセス失敗、スピーカー音の自己録音モードを開始します", e);
+        }
+
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             sourceNode = audioCtx.createMediaElementSource(mediaPreview);
@@ -410,16 +419,13 @@
             analyserBoost = audioCtx.createAnalyser(); 
             analyserBoost.fftSize = 256;
 
-            destNode = audioCtx.createMediaStreamDestination();
-            
+            // 視覚的なメーターと波形キャンバスを動かすためのルート
             sourceNode.connect(analyserMeter);
-            
             sourceNode.connect(gainNode);
             gainNode.connect(audioCtx.destination);
 
             sourceNode.connect(boostNode);
             boostNode.connect(analyserBoost);
-            analyserBoost.connect(destNode);
 
             waveformCanvas.width = waveformCanvas.clientWidth;
             waveformCanvas.height = waveformCanvas.clientHeight;
@@ -435,12 +441,7 @@
             }
             mediaPreview.playbackRate = parseFloat(speedSelect.value);
             
-            // 【重要・修正点】
-            // ブラウザ標準の文字起こしエンジンに対し、マイク入力の代わりに、
-            // 「Web Audio APIで増幅した仮想ストリーム(destNode.stream)」を流し込む処理は
-            // 現在の一部のモバイルブラウザや標準仕様において、裏側での完全バインドが制限される場合があります。
-            // 互換性を最大化しつつ、このファイルでも前画面同様の多重ガードロジックを安全に適用しました。
-            
+            // 音声認識エンジンを起動し、ファイルを再生（スマホのスピーカー出力をそのままマイクで拾わせる）
             recognition.start();
             mediaPreview.play(); 
             
@@ -465,6 +466,11 @@
         fileInput.disabled = false;
         
         mediaPreview.pause(); 
+
+        if (micStream) {
+            micStream.getTracks().forEach(track => track.stop());
+            micStream = null;
+        }
 
         const oldInterim = document.getElementById('interim-live-block');
         if (oldInterim) oldInterim.remove();
