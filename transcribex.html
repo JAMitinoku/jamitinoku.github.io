@@ -80,6 +80,7 @@
     let restartTimeoutId = null;
     let multiplier = 1.0; 
     let lastProcessedIndex = -1; 
+    let lastRawText = ""; // モバイルAndroid用：直前の生確定テキスト保持用
 
     function resetPermissions() { 
         if (confirm("ページを再読み込みしてマイクの権限設定などをリセットしますか？\n（現在のログは消去されます）")) {
@@ -150,6 +151,7 @@
         recognition.onstart = async () => {
             document.getElementById('engine-status').innerText = "LIVE";
             lastProcessedIndex = -1; 
+            lastRawText = "";
             await updateMicList();
         };
 
@@ -165,9 +167,11 @@
                 let transcript = e.results[i][0].transcript;
 
                 if (e.results[i].isFinal) {
-                    if (i > lastProcessedIndex) {
+                    // モバイル対策：同じインデックス、または全く同じテキストの連続確定をスルー
+                    if (i > lastProcessedIndex && transcript !== lastRawText) {
                         addFinalBlock(transcript);
                         lastProcessedIndex = i;
+                        lastRawText = transcript;
                     }
                 } else {
                     interimText += transcript;
@@ -229,7 +233,32 @@
         if (cleanedText === "") return;
 
         const screen = document.getElementById('log-screen');
-        if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
+        
+        // モバイル環境向けの強力な重複排除
+        if (screen.lastElementChild) {
+            let lastBlockText = screen.lastElementChild.innerText.replace(/[。？！\?\!]$/, "").trim();
+            
+            // 1. 完全一致なら追加しない
+            if (lastBlockText === cleanedText) return;
+
+            // 2. 「余白を」の後に「余白を。」が来た場合など、新しいテキストに内包されていれば上書き更新
+            if (cleanedText.startsWith(lastBlockText)) {
+                const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
+                screen.lastElementChild.innerText = cleanedText + (hasPunctuation ? "" : "。");
+                return;
+            }
+
+            // 3. 末尾と先頭の部分重複（2文字以上の重なりを検知して削る）
+            for (let i = 2; i <= lastBlockText.length; i++) {
+                let tail = lastBlockText.slice(-i);
+                if (cleanedText.startsWith(tail)) {
+                    cleanedText = cleanedText.slice(i);
+                    break;
+                }
+            }
+        }
+
+        if (cleanedText === "") return;
 
         const newBlock = document.createElement('div');
         newBlock.className = 'block';
@@ -283,7 +312,6 @@
                 constraints.audio.deviceId = { exact: selectedMic };
             }
 
-            // スマホでの音切れを防ぐため、権限チェック後に一旦ストリームを閉じます
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             stream.getTracks().forEach(track => track.stop());
 
@@ -353,7 +381,6 @@
     };
 
     document.getElementById('boost-select').onchange = () => {
-        // メニューを変更した際にエラーが起きないよう処理を受け流します
         multiplier = parseFloat(document.getElementById('boost-select').value);
         if (isActive) {
             document.getElementById('btn-start').click();
