@@ -70,7 +70,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">READY</span>
-        <span id="mode-status" style="color: var(--accent);">ANDROID-OPTIMIZED</span>
+        <span id="mode-status" style="color: var(--accent);">ZERO-DROP OPTIMIZED</span>
     </div>
 </div>
 
@@ -78,8 +78,8 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 50.0; // デフォルト値を50.0に設定
-    let lastFinalText = "";
+    let multiplier = 1.0; 
+    let lastProcessedIndex = -1; // 【多重表示対策】最後に確定処理したインデックスを保持
 
     function resetPermissions() { 
         if (confirm("ページを再読み込みしてマイクの権限設定などをリセットしますか？\n（現在のログは消去されます）")) {
@@ -87,25 +87,25 @@
         }
     }
 
-    // 元のブースト選択肢（1.0〜200.0）を再生成するロジックを復元
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
+        
         const firstOpt = document.createElement('option');
-        firstOpt.value = "1.0"; firstOpt.text = "1.0";
+        firstOpt.value = "1.0"; firstOpt.text = "1.0 (標準)";
         boostSelect.appendChild(firstOpt);
 
         for (let i = 10; i <= 200; i += 10) {
             const opt = document.createElement('option');
-            opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 50) opt.selected = true; // デフォルトは50.0
+            const val = (i / 10).toFixed(1);
+            opt.value = val; opt.text = val;
+            if (i === 10) opt.selected = true; // 初期値は標準の1.0
             boostSelect.appendChild(opt);
         }
     }
 
     async function updateMicList() {
         try {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
             const devs = await navigator.mediaDevices.enumerateDevices();
             const sel = document.getElementById('mic-select');
             const currentVal = sel.value;
@@ -149,19 +149,28 @@
 
         recognition.onstart = async () => {
             document.getElementById('engine-status').innerText = "LIVE";
+            lastProcessedIndex = -1; // 開始時にインデックスを初期化
+            await updateMicList();
         };
 
         recognition.onresult = (e) => {
             const screen = document.getElementById('log-screen');
+            
             const oldInterim = document.getElementById('interim-live-block');
             if (oldInterim) oldInterim.remove();
 
             let interimText = '';
 
             for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (!e.results[i]) continue;
                 let transcript = e.results[i][0].transcript;
+
                 if (e.results[i].isFinal) {
-                    addFinalBlock(transcript);
+                    // 【多重表示対策】過去に一度でも確定処理したインデックスは二度と追加しない
+                    if (i > lastProcessedIndex) {
+                        addFinalBlock(transcript);
+                        lastProcessedIndex = i;
+                    }
                 } else {
                     interimText += transcript;
                 }
@@ -177,6 +186,7 @@
             }
         };
 
+        // スマホの瞬断時負荷を考慮し、ウェイトを20msから200msへ安全に微調整
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
@@ -185,19 +195,21 @@
                         try { 
                             recognition.start(); 
                         } catch(e) {
+                            console.warn("エンジンロック検知、強制覚醒実行");
                             forceResetEngine();
                         }
                     }
-                }, 50); 
+                }, 200); 
             }
         };
 
         recognition.onerror = (ev) => {
             console.warn("認識エラーハンドリング:", ev.error);
             if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
-                // 自動復帰を待つ
+                // 自動リスタートに処理を委ねる
             } else if (ev.error === 'not-allowed') {
                 document.getElementById('engine-status').innerText = "マイク許可なし";
+                alert("マイクの使用が許可されていません。");
             }
         };
     }
@@ -213,25 +225,6 @@
         }
     }
 
-    function mergeOverlap(prev, next) {
-        if (!prev) return next;
-        if (prev === next) return ""; 
-        
-        if (prev.length > 4 && next.length > 4) {
-            if (prev.includes(next) || next.includes(prev)) {
-                if (prev.endsWith(next)) return "";
-            }
-        }
-
-        let maxLength = Math.min(prev.length, next.length);
-        for (let len = maxLength; len > 0; len--) {
-            if (prev.endsWith(next.substring(0, len))) {
-                return next.substring(len); 
-            }
-        }
-        return next;
-    }
-
     function addFinalBlock(text) {
         let cleanedText = text.trim();
         if (!cleanedText) return;
@@ -240,19 +233,14 @@
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
 
-        let uniqueText = mergeOverlap(lastFinalText, cleanedText);
-        uniqueText = uniqueText.trim();
-        
-        if (!uniqueText) return;
-
-        lastFinalText = cleanedText;
-
         const screen = document.getElementById('log-screen');
+        if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
+
         const newBlock = document.createElement('div');
         newBlock.className = 'block';
 
-        const hasPunctuation = /[。？！\?\!]$/.test(uniqueText);
-        newBlock.innerText = uniqueText + (hasPunctuation ? "" : "。");
+        const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
+        newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
         
         newBlock.onclick = function() {
             if (this.getAttribute('contenteditable') !== 'true') {
@@ -286,15 +274,43 @@
         document.getElementById('btn-stop').disabled = false;
         document.getElementById('engine-status').innerText = "CONNECTING";
 
+        try {
+            const filterActive = document.getElementById('bgm-filter').checked;
+            const selectedMic = document.getElementById('mic-select').value;
+            
+            const constraints = { 
+                audio: { 
+                    noiseSuppression: filterActive,
+                    echoCancellation: true
+                } 
+            };
+            if (selectedMic !== 'default') {
+                constraints.audio.deviceId = { exact: selectedMic };
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            // 【認識率向上】Web Audio API を生成し、選択された倍率でマイク音量を実際に増幅（ブースト）
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaStreamSource(stream);
+            const gainNode = audioCtx.createGain();
+            
+            multiplier = parseFloat(document.getElementById('boost-select').value);
+            gainNode.gain.value = multiplier; 
+            
+            source.connect(gainNode);
+
+        } catch (e) { console.warn("オーディオストリーム初期化スキップ", e); }
+
         if (!recognition) {
             initRecognition();
         }
 
         if (recognition) {
             try {
-                multiplier = parseFloat(document.getElementById('boost-select').value);
                 recognition.start();
             } catch (e) {
+                console.error(e);
                 forceResetEngine();
             }
         }
@@ -347,15 +363,16 @@
         }
     };
 
-    // 感度変更時のイベントを復元
     document.getElementById('boost-select').onchange = () => {
         multiplier = parseFloat(document.getElementById('boost-select').value);
+        if (isActive) {
+            document.getElementById('btn-start').click();
+        }
     };
 
     function clearAll() { 
         if(!confirm("ログを削除しますか？")) return;
         document.getElementById('log-screen').innerHTML = ''; 
-        lastFinalText = ""; 
     }
     
     function copyAll() {

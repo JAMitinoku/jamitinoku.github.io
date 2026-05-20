@@ -19,23 +19,19 @@
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
         #btn-stop { background: var(--danger); color: white; border: none; }
         
-        /* 再生コントロール用のスタイル */
         .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
         .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
         input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; padding: 0; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
-        /* ボリューム・ブースト調整の微調整 */
         .vol-group, .boost-group { display: flex; align-items: center; gap: 4px; }
         .vol-group input[type="range"] { width: 80px; }
         .boost-group input[type="range"] { width: 90px; border-color: #ffad33; }
         .vol-text, .boost-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
 
-        /* チェックボックスの微調整 */
         .filler-group { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; user-select: none; }
         .filler-group input[type="checkbox"] { cursor: pointer; margin: 0; width: 14px; height: 14px; }
 
-        /* ビジュアルモニター（メーターと波形） */
         .visualizer-group { display: flex; align-items: center; gap: 8px; background: #11141a; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
         .meter-container { width: 60px; height: 12px; background: #222; border-radius: 2px; overflow: hidden; position: relative; border: 1px solid #444; }
         .meter-bar { width: 0%; height: 100%; background: linear-gradient(to right, #238636 70%, #ffad33 85%, #f85149 100%); transition: width 0.05s linear; }
@@ -138,6 +134,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
+    let lastProcessedIndex = -1; // 【多重表示対策】確定データのインデックス管理用
     
     let audioCtx = null;
     let sourceNode = null;
@@ -145,9 +142,8 @@
     let boostNode = null; 
     let destNode = null;
     
-    // 可視化用ノードと設定
-    let analyserMeter = null;  // 全体音量計測用
-    let analyserBoost = null;  // ブースト後波形用
+    let analyserMeter = null;  
+    let analyserBoost = null;  
     let drawVisualId = null;
 
     const fileInput = document.getElementById('file-input');
@@ -156,7 +152,6 @@
     const btnStop = document.getElementById('btn-stop');
     const engineStatus = document.getElementById('engine-status');
     
-    // コントロール要素
     const seekBar = document.getElementById('seek-bar');
     const timeShow = document.getElementById('time-show');
     const speedSelect = document.getElementById('speed-select');
@@ -166,12 +161,10 @@
     const boostShow = document.getElementById('boost-show');
     const fillerCheck = document.getElementById('filler-check');
 
-    // UI要素
     const levelMeterBar = document.getElementById('level-meter-bar');
     const waveformCanvas = document.getElementById('waveform-canvas');
     const canvasCtx = waveformCanvas.getContext('2d');
 
-    // ファイル選択時
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -191,12 +184,10 @@
         engineStatus.innerText = "READY: " + file.name;
     };
 
-    // メディアのメタデータ読み込み完了時（総時間の表示更新）
     mediaPreview.onloadedmetadata = () => {
         updateTimeDisplay();
     };
 
-    // 再生位置が更新されたとき（シークバーと時間の同期）
     mediaPreview.ontimeupdate = () => {
         if (!mediaPreview.duration) return;
         if (!seekBar.dataset.dragging) {
@@ -206,7 +197,6 @@
         updateTimeDisplay();
     };
 
-    // シークバーを操作したときの処理
     seekBar.oninput = () => {
         seekBar.dataset.dragging = "true";
     };
@@ -223,12 +213,10 @@
         }
     };
 
-    // 再生速度の変更
     speedSelect.onchange = () => {
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
     };
 
-    // 音量スライダーの変更処理（最大500%）
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -237,7 +225,6 @@
         }
     };
 
-    // 感度ブーストの変更処理（1〜10倍・1刻み）
     boostSlider.oninput = () => {
         const boostValue = boostSlider.value;
         boostShow.innerText = boostValue + "倍";
@@ -246,7 +233,6 @@
         }
     };
 
-    // 時間表示のフォーマット関数 (mm:ss)
     function formatTime(seconds) {
         if (isNaN(seconds)) return "00:00";
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -258,7 +244,6 @@
         timeShow.innerText = `${formatTime(mediaPreview.currentTime)} / ${formatTime(mediaPreview.duration)}`;
     }
 
-    // リアルタイム描画処理（レベルメーター＆波形グラフ）
     function startVisualizer() {
         if (!analyserMeter || !analyserBoost) return;
 
@@ -275,7 +260,6 @@
             }
             drawVisualId = requestAnimationFrame(draw);
 
-            // 1. 音量レベルゲージの計算 (RMS値ベース)
             analyserMeter.getByteTimeDomainData(dataArrayMeter);
             let sumSquares = 0;
             for (let i = 0; i < bufferLengthMeter; i++) {
@@ -286,7 +270,6 @@
             let levelPercent = Math.min(100, Math.floor(rms * 250));
             levelMeterBar.style.width = levelPercent + '%';
 
-            // 2. 感度波形グラフの描画 (ブースト後の音声データ)
             analyserBoost.getByteTimeDomainData(dataArrayBoost);
             canvasCtx.fillStyle = '#000000';
             canvasCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
@@ -331,6 +314,7 @@
 
         recognition.onstart = () => {
             engineStatus.innerText = "PROCESSING (文字起こし中...)";
+            lastProcessedIndex = -1; // 開始時に初期化
         };
 
         recognition.onresult = (e) => {
@@ -343,7 +327,11 @@
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
                 if (e.results[i].isFinal) {
-                    addFinalBlock(transcript);
+                    // 【多重表示対策】スマホ・ブラウザの重複バグを防ぐガードを導入
+                    if (i > lastProcessedIndex) {
+                        addFinalBlock(transcript);
+                        lastProcessedIndex = i;
+                    }
                 } else {
                     interimText += transcript;
                 }
@@ -359,6 +347,7 @@
             }
         };
 
+        // スマホや低スペック端末でのリスタート安全マージン（200ms）
         recognition.onend = () => {
             if (isActive && !mediaPreview.paused && !mediaPreview.ended) {
                 clearTimeout(restartTimeoutId);
@@ -366,7 +355,7 @@
                     if (isActive && recognition) {
                         try { recognition.start(); } catch(err) { forceResetEngine(); }
                     }
-                }, 20); 
+                }, 200); 
             }
         };
 
@@ -396,7 +385,6 @@
         }
     };
 
-    // 開始ボタン
     btnStart.onclick = async () => {
         if (!mediaPreview.src) return;
 
@@ -410,15 +398,12 @@
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             sourceNode = audioCtx.createMediaElementSource(mediaPreview);
             
-            // 1. 自分が聴く用の音量ノード
             gainNode = audioCtx.createGain();
             gainNode.gain.value = parseInt(volumeBar.value) / 100;
 
-            // 2. 文字起こしエンジンに送る用の感度ブーストノード
             boostNode = audioCtx.createGain();
             boostNode.gain.value = parseFloat(boostSlider.value);
 
-            // 3. アナライザーノードの設置
             analyserMeter = audioCtx.createAnalyser(); 
             analyserMeter.fftSize = 256;
             
@@ -450,6 +435,12 @@
             }
             mediaPreview.playbackRate = parseFloat(speedSelect.value);
             
+            // 【重要・修正点】
+            // ブラウザ標準の文字起こしエンジンに対し、マイク入力の代わりに、
+            // 「Web Audio APIで増幅した仮想ストリーム(destNode.stream)」を流し込む処理は
+            // 現在の一部のモバイルブラウザや標準仕様において、裏側での完全バインドが制限される場合があります。
+            // 互換性を最大化しつつ、このファイルでも前画面同様の多重ガードロジックを安全に適用しました。
+            
             recognition.start();
             mediaPreview.play(); 
             
@@ -460,7 +451,6 @@
         }
     };
 
-    // 一時停止ボタン
     btnStop.onclick = () => {
         stopTranscribing();
         engineStatus.innerText = "PAUSED (一時停止中)";
@@ -490,7 +480,6 @@
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        // フィラー削除がオンの場合のみ置換処理を実行
         if (fillerCheck.checked) {
             const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
             cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
