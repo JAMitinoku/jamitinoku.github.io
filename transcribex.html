@@ -47,7 +47,7 @@
         <label>入力:</label>
         <select id="mic-select"><option value="default">既定のマイク</option></select>
     </div>
-    <div class="tool-group" style="display: none;">
+    <div class="tool-group">
         <label>感度:</label>
         <select id="boost-select"></select>
     </div>
@@ -283,12 +283,12 @@
                 constraints.audio.deviceId = { exact: selectedMic };
             }
 
-            // モバイル環境での確実な動作のため、ストリームチェック後に解放し音声認識エンジンに委ねる
+            // スマホでの音切れを防ぐため、権限チェック後に一旦ストリームを閉じます
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
             stream.getTracks().forEach(track => track.stop());
 
         } catch (e) { 
-            console.warn("マイク権限確認スキップまたは失敗:", e); 
+            console.warn("マイク権限確認のスキップまたは失敗:", e); 
         }
 
         if (!recognition) {
@@ -353,6 +353,7 @@
     };
 
     document.getElementById('boost-select').onchange = () => {
+        // メニューを変更した際にエラーが起きないよう処理を受け流します
         multiplier = parseFloat(document.getElementById('boost-select').value);
         if (isActive) {
             document.getElementById('btn-start').click();
