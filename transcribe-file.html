@@ -87,8 +87,7 @@
 
         <div class="tool-group vol-group">
             <label>音量:</label>
-            <input type="range" id="volume-bar" value="100" min="0" max="300">
-            <span class="vol-text" id="volume-show">100%</span>
+            <input type="range" id="volume-bar" value="100" min="0" max="500"> <span class="vol-text" id="volume-show">100%</span>
         </div>
 
         <div class="tool-group boost-group">
@@ -165,7 +164,7 @@
     const volumeShow = document.getElementById('volume-show');
     const boostSlider = document.getElementById('boost-slider'); 
     const boostShow = document.getElementById('boost-show');
-    const fillerCheck = document.getElementById('filler-check'); // フィラー用チェックボックス
+    const fillerCheck = document.getElementById('filler-check');
 
     // UI要素
     const levelMeterBar = document.getElementById('level-meter-bar');
@@ -229,7 +228,7 @@
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
     };
 
-    // 音量スライダーの変更処理（最大300%）
+    // 音量スライダーの変更処理（最大500%）
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -491,7 +490,7 @@
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        // 【機能変更】フィラー削除がオンの場合のみ置換処理を実行
+        // フィラー削除がオンの場合のみ置換処理を実行
         if (fillerCheck.checked) {
             const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
             cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
