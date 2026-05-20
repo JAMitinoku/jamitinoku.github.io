@@ -3,107 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声ファイル文字起こし（MP3/MP4対応）</title>
+    <title>逐語録 Pro - File Transcriber (コントロール完全版)</title>
     <style>
-        :root { --primary: #007bff; --danger: #dc3545; --success: #28a745; --secondary: #6c757d; --info: #17a2b8; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 15px; background: #f4f7f9; color: #333; max-width: 600px; margin: auto; }
-        .card { background: #fff; padding: 20px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); box-sizing: border-box; }
-        h2 { margin: 0 0 15px; font-size: 1.2em; text-align: center; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .status-area { font-size: 0.9em; text-align: center; margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 6px; color: #856404; font-weight: bold; }
-        .file-area { margin-bottom: 15px; padding: 15px; background: #f8f9fa; border: 2px dashed #ddd; border-radius: 8px; text-align: center; }
-        #audio-player { width: 100%; margin-top: 10px; display: none; }
-        .controls { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; }
-        button { flex: 1; min-width: 80px; padding: 14px; font-size: 14px; font-weight: bold; cursor: pointer; border: none; border-radius: 8px; color: white; transition: 0.2s; }
-        #start { background: var(--primary); }
-        #stop { background: var(--danger); }
-        #copy { background: var(--info); }
-        #clear { background: var(--secondary); }
-        button:disabled { background: #ccc !important; opacity: 0.6; }
-        #output-box { width: 100%; height: 400px; padding: 15px; border-radius: 12px; border: 1px solid #eef; background: #fdfdfd; overflow-y: auto; line-height: 1.8; font-size: 16px; box-sizing: border-box; }
-        #final-span { color: #222; white-space: pre-wrap; }
-        #interim-span { color: #999; font-style: italic; }
+        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        
+        .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+        .tool-group { display: flex; align-items: center; gap: 6px; }
+        label { font-size: 11px; color: #8b949e; white-space: nowrap; }
+        
+        button, select, input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        input[type="file"] { max-width: 150px; font-size: 11px; padding: 5px; }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        
+        #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
+        #btn-stop { background: var(--danger); color: white; border: none; }
+        
+        /* 再生コントロール用のスタイル */
+        .playback-panel { display: flex; align-items: center; gap: 8px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); }
+        .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+        
+        #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
+        
+        .action-group { margin-left: auto; display: flex; gap: 8px; }
+        @media (max-width: 768px) {
+            .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
+        }
+        
+        #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
+        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; transition: background 0.2s; }
+        .block:hover { background: #161b22; cursor: text; }
+        .block:focus { outline: none; background: #1f242c; border-left-color: #ffad33; border-radius: 0 4px 4px 0; padding-right: 8px; }
+        
+        .interim-live { color: #8b949e; font-style: italic; border-left: 2px dashed #6e7681; padding-left: 12px; margin-bottom: 0.8em; min-height: 1.6em; word-break: break-all; }
+        
+        .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
+        #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
     </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>ファイル文字起こし（MP3/MP4対応）</h2>
-    
-    <div class="file-area">
-        <input type="file" id="audio-file" accept="audio/*,video/*">
-        <audio id="audio-player" controls></audio>
+<div class="toolbar">
+    <div class="tool-group">
+        <label>ファイル:</label>
+        <input type="file" id="file-input" accept="audio/*,video/*">
     </div>
 
-    <div class="status-area" id="status-display">ファイルを読み込み、「文字起こし開始」を押してください</div>
-    
-    <div class="controls">
-        <button id="start" disabled>文字起こし開始</button>
-        <button id="stop" disabled>停止</button>
-        <button id="copy">コピー</button>
-        <button id="clear">クリア</button>
+    <video id="media-preview"></video>
+
+    <div class="playback-panel">
+        <span class="time-display" id="time-show">00:00 / 00:00</span>
+        <input type="range" id="seek-bar" value="0" max="100" disabled>
+        
+        <div class="tool-group">
+            <label>速度:</label>
+            <select id="speed-select" style="padding: 4px 8px; font-size: 11px;">
+                <option value="0.5">0.5x</option>
+                <option value="0.75">0.75x</option>
+                <option value="1.0" selected>1.0x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2.0">2.0x</option>
+            </select>
+        </div>
     </div>
 
-    <div id="output-box">
-        <span id="final-span"></span>
-        <span id="interim-span"></span>
+    <button id="btn-start" disabled>文字起こし開始</button>
+    <button id="btn-stop" disabled>一時停止</button>
+    
+    <div class="action-group">
+        <button onclick="copyAll()">コピー</button>
+        <button onclick="saveAll()" style="color: var(--accent);">結果保存</button>
+        <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
+    </div>
+</div>
+
+<div id="log-screen"></div>
+
+<div class="monitor">
+    <div id="status-bar">
+        <span id="engine-status">ファイルを選択してください</span>
+        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED</span>
     </div>
 </div>
 
 <script>
-    const fileInput = document.getElementById('audio-file');
-    const audioPlayer = document.getElementById('audio-player');
-    const startBtn = document.getElementById('start');
-    const stopBtn = document.getElementById('stop');
-    const copyBtn = document.getElementById('copy');
-    const clearBtn = document.getElementById('clear');
-    const finalSpan = document.getElementById('final-span');
-    const interimSpan = document.getElementById('interim-span');
-    const outputBox = document.getElementById('output-box');
-    const statusDisp = document.getElementById('status-display');
-
     let recognition = null;
     let isActive = false;
+    let restartTimeoutId = null;
+    
     let audioCtx = null;
-    let mediaSource = null;
+    let sourceNode = null;
+    let destNode = null;
 
-    function updateStatus(state, msg) {
-        statusDisp.innerText = msg;
-        if (state === 'online') {
-            statusDisp.style.background = "#d4edda";
-            statusDisp.style.color = "#155724";
-        } else if (state === 'offline') {
-            statusDisp.style.background = "#e2e3e5";
-            statusDisp.style.color = "#383d41";
-        } else {
-            statusDisp.style.background = "#fff3cd";
-            statusDisp.style.color = "#856404";
-        }
-    }
+    const fileInput = document.getElementById('file-input');
+    const mediaPreview = document.getElementById('media-preview');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const engineStatus = document.getElementById('engine-status');
+    
+    // コントロール要素
+    const seekBar = document.getElementById('seek-bar');
+    const timeShow = document.getElementById('time-show');
+    const speedSelect = document.getElementById('speed-select');
 
-    // ファイルが選択されたときの処理
+    // ファイル選択時
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         const fileURL = URL.createObjectURL(file);
-        audioPlayer.src = fileURL;
-        audioPlayer.style.display = "block";
-        startBtn.disabled = false;
-        updateStatus('', "ファイルが読み込まれました。「文字起こし開始」を押してください");
+        mediaPreview.src = fileURL;
+        
+        if (file.type.startsWith('video/')) {
+            mediaPreview.style.display = 'block';
+        } else {
+            mediaPreview.style.display = 'none';
+        }
+
+        btnStart.disabled = false;
+        seekBar.disabled = false;
+        seekBar.value = 0;
+        engineStatus.innerText = "READY: " + file.name;
     };
+
+    // メディアのメタデータ読み込み完了時（総時間の表示更新）
+    mediaPreview.onloadedmetadata = () => {
+        updateTimeDisplay();
+    };
+
+    // 再生位置が更新されたとき（シークバーと時間の同期）
+    mediaPreview.ontimeupdate = () => {
+        if (!mediaPreview.duration) return;
+        // ユーザーがシークバーをドラッグ中でなければ値を更新
+        if (!seekBar.dataset.dragging) {
+            const progress = (mediaPreview.currentTime / mediaPreview.duration) * 100;
+            seekBar.value = progress;
+        }
+        updateTimeDisplay();
+    };
+
+    // シークバーを操作したときの処理
+    seekBar.oninput = () => {
+        seekBar.dataset.dragging = "true";
+    };
+
+    seekBar.onchange = () => {
+        if (!mediaPreview.duration) return;
+        const newTime = (seekBar.value / 100) * mediaPreview.duration;
+        
+        // 再生位置を変更
+        mediaPreview.currentTime = newTime;
+        seekBar.removeAttribute('data-dragging');
+
+        // もし文字起こし稼働中なら、インラインでの文字ズレを防ぐためエンジンを強制リセット
+        if (isActive) {
+            forceResetEngine();
+        }
+    };
+
+    // 再生速度の変更
+    speedSelect.onchange = () => {
+        mediaPreview.playbackRate = parseFloat(speedSelect.value);
+    };
+
+    // 時間表示のフォーマット関数 (mm:ss)
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return "00:00";
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function updateTimeDisplay() {
+        timeShow.innerText = `${formatTime(mediaPreview.currentTime)} / ${formatTime(mediaPreview.duration)}`;
+    }
 
     function initRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            updateStatus('offline', "ブラウザが音声認識に対応していません");
+            engineStatus.innerText = "非対応ブラウザ";
             return;
-        }
-
-        // Web Audio API を使ってプレイヤーの音をブラウザの認識システムに流す（一部ブラウザの互換性対策）
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            mediaSource = audioCtx.createMediaElementSource(audioPlayer);
-            mediaSource.connect(audioCtx.destination);
         }
 
         recognition = new SpeechRecognition();
@@ -112,117 +194,203 @@
         recognition.continuous = true;
 
         recognition.onstart = () => {
-            updateStatus('online', "文字起こし中... ファイルを再生しています。");
-            audioPlayer.play(); // 音声認識が始まったら動画/音声を再生
+            engineStatus.innerText = "PROCESSING (文字起こし中...)";
         };
 
         recognition.onresult = (e) => {
+            const screen = document.getElementById('log-screen');
+            const oldInterim = document.getElementById('interim-live-block');
+            if (oldInterim) oldInterim.remove();
+
             let interimText = '';
+
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
                 if (e.results[i].isFinal) {
-                    let cleanedText = transcript.trim();
-                    
-                    // フィラー（えー、あの）の除去
-                    const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-                    cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
-                    
-                    if (cleanedText === "") continue;
-
-                    const currentFinal = finalSpan.innerText.trim();
-                    let separator = currentFinal !== "" ? "。\n" : "";
-                    if (/[。？！?!]$/.test(currentFinal)) separator = "\n";
-                    if (!/[。？！?!]$/.test(cleanedText)) cleanedText += "。";
-
-                    finalSpan.innerText += separator + cleanedText;
+                    addFinalBlock(transcript);
                 } else {
                     interimText += transcript;
                 }
             }
-            interimSpan.innerText = interimText;
-            outputBox.scrollTop = outputBox.scrollHeight;
+
+            if (interimText) {
+                const interimBlock = document.createElement('div');
+                interimBlock.id = 'interim-live-block';
+                interimBlock.className = 'interim-live';
+                interimBlock.innerText = interimText;
+                screen.appendChild(interimBlock);
+                screen.scrollTop = screen.scrollHeight;
+            }
         };
 
-        // メディアが終了したとき、または手動で止まったとき
         recognition.onend = () => {
-            if (isActive && audioPlayer.ended) {
-                // 最後まで再生しきって終わった場合
-                stopTranscribing();
-                updateStatus('offline', "文字起こしが完了しました（ファイルの終端）");
-            } else if (isActive) {
-                // 予期せぬ切断の場合は再起動
-                try { recognition.start(); } catch(e) {}
+            if (isActive && !mediaPreview.paused && !mediaPreview.ended) {
+                clearTimeout(restartTimeoutId);
+                restartTimeoutId = setTimeout(() => {
+                    if (isActive && recognition) {
+                        try { recognition.start(); } catch(err) { forceResetEngine(); }
+                    }
+                }, 20); 
             }
         };
 
         recognition.onerror = (ev) => {
             console.warn("認識エラー:", ev.error);
+            if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
+                try { recognition.stop(); } catch(e){}
+            }
         };
     }
 
-    function stopTranscribing() {
-        isActive = false;
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        audioPlayer.pause();
+    function forceResetEngine() {
         if (recognition) {
-            try { recognition.stop(); } catch(e){}
+            try { recognition.abort(); } catch(e){}
+            recognition = null;
+        }
+        if (isActive) {
+            initRecognition();
+            try { recognition.start(); } catch(e){}
         }
     }
 
-    startBtn.onclick = () => {
-        if (!fileInput.files[0]) return;
-        
+    mediaPreview.onended = () => {
+        if (isActive) {
+            stopTranscribing();
+            engineStatus.innerText = "完了 (ファイルの終端に達しました)";
+        }
+    };
+
+    // 開始ボタン
+    btnStart.onclick = async () => {
+        if (!mediaPreview.src) return;
+
         isActive = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        updateStatus('', "準備中...");
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        fileInput.disabled = true;
+        engineStatus.innerText = "CONNECTING";
+
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            sourceNode = audioCtx.createMediaElementSource(mediaPreview);
+            destNode = audioCtx.createMediaStreamDestination();
+            sourceNode.connect(destNode);
+            sourceNode.connect(audioCtx.destination);
+        }
 
         if (!recognition) {
             initRecognition();
         }
 
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
+        try {
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+            // 選択されている再生速度を適用
+            mediaPreview.playbackRate = parseFloat(speedSelect.value);
+            
+            recognition.start();
+            mediaPreview.play(); 
+        } catch (e) {
+            console.error(e);
+            forceResetEngine();
         }
+    };
+
+    // 一時停止ボタン
+    btnStop.onclick = () => {
+        stopTranscribing();
+        engineStatus.innerText = "PAUSED (一時停止中)";
+    };
+
+    function stopTranscribing() {
+        isActive = false;
+        clearTimeout(restartTimeoutId);
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        fileInput.disabled = false;
+        
+        mediaPreview.pause(); 
+
+        const oldInterim = document.getElementById('interim-live-block');
+        if (oldInterim) oldInterim.remove();
 
         if (recognition) {
-            try {
-                // 再生位置を最初に戻す（最初からやり直す場合）
-                if(audioPlayer.ended) audioPlayer.currentTime = 0;
-                recognition.start();
-            } catch (e) {
-                console.error(e);
-                updateStatus('offline', "起動に失敗しました。再読込してください。");
+            try { recognition.stop(); } catch(e){}
+        }
+    }
+
+    function addFinalBlock(text) {
+        let cleanedText = text.trim();
+        if (!cleanedText) return;
+
+        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
+        cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
+        if (cleanedText === "") return;
+
+        const screen = document.getElementById('log-screen');
+        if (screen.lastElementChild && (screen.lastElementChild.innerText === cleanedText || screen.lastElementChild.innerText === cleanedText + "。")) return;
+
+        const newBlock = document.createElement('div');
+        newBlock.className = 'block';
+
+        const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
+        newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
+        
+        newBlock.onclick = function() {
+            if (this.getAttribute('contenteditable') !== 'true') {
+                this.setAttribute('contenteditable', 'true');
+                this.focus();
             }
-        }
-    };
+        };
 
-    stopBtn.onclick = () => {
-        stopTranscribing();
-        updateStatus('offline', "一時停止しました");
-    };
+        newBlock.onblur = function() {
+            this.removeAttribute('contenteditable');
+            this.innerText = this.innerText.trim();
+            if (this.innerText === "") {
+                this.remove();
+            }
+        };
 
-    copyBtn.onclick = async () => {
-        const text = finalSpan.innerText;
-        if (!text.trim()) return;
-        try {
-            await navigator.clipboard.writeText(text);
-            const originalText = copyBtn.innerText;
-            copyBtn.innerText = "コピー完了！";
-            setTimeout(() => copyBtn.innerText = originalText, 2000);
-        } catch (err) {
-            alert("長押しして手動コピーしてください：\n\n" + text);
-        }
-    };
+        newBlock.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.blur();
+            }
+        };
+        
+        screen.appendChild(newBlock);
+        requestAnimationFrame(() => { screen.scrollTop = screen.scrollHeight; });
+    }
 
-    clearBtn.onclick = () => {
-        if (confirm("表示されているテキストを消去しますか？")) {
-            finalSpan.innerText = "";
-            interimSpan.innerText = "";
+    function clearAll() { 
+        if(!confirm("ログを削除しますか？")) return;
+        document.getElementById('log-screen').innerHTML = ''; 
+    }
+    
+    function copyAll() {
+        const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n');
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = engineStatus.innerText;
+            engineStatus.innerText = "COPIED!";
+            setTimeout(() => engineStatus.innerText = originalText, 1500);
+        });
+    }
+
+    function saveAll() {
+        const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n');
+        if (!text) {
+            alert("保存するテキストがありません。");
+            return;
         }
-    };
+        const blob = new Blob([text], { type: 'text/plain' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'file_transcribe_log.txt';
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
 </script>
-
 </body>
 </html>
