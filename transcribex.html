@@ -47,7 +47,7 @@
         <label>入力:</label>
         <select id="mic-select"><option value="default">既定のマイク</option></select>
     </div>
-    <div class="tool-group">
+    <div class="tool-group" style="display: none;">
         <label>感度:</label>
         <select id="boost-select"></select>
     </div>
@@ -70,7 +70,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">READY</span>
-        <span id="mode-status" style="color: var(--accent);">ZERO-DROP OPTIMIZED</span>
+        <span id="mode-status" style="color: var(--accent);">ZERO-DROP OPTIMIZED (MOBILE FIX)</span>
     </div>
 </div>
 
@@ -79,7 +79,7 @@
     let isActive = false;
     let restartTimeoutId = null;
     let multiplier = 1.0; 
-    let lastProcessedIndex = -1; // 【多重表示対策】最後に確定処理したインデックスを保持
+    let lastProcessedIndex = -1; 
 
     function resetPermissions() { 
         if (confirm("ページを再読み込みしてマイクの権限設定などをリセットしますか？\n（現在のログは消去されます）")) {
@@ -99,7 +99,7 @@
             const opt = document.createElement('option');
             const val = (i / 10).toFixed(1);
             opt.value = val; opt.text = val;
-            if (i === 10) opt.selected = true; // 初期値は標準の1.0
+            if (i === 10) opt.selected = true; 
             boostSelect.appendChild(opt);
         }
     }
@@ -149,13 +149,12 @@
 
         recognition.onstart = async () => {
             document.getElementById('engine-status').innerText = "LIVE";
-            lastProcessedIndex = -1; // 開始時にインデックスを初期化
+            lastProcessedIndex = -1; 
             await updateMicList();
         };
 
         recognition.onresult = (e) => {
             const screen = document.getElementById('log-screen');
-            
             const oldInterim = document.getElementById('interim-live-block');
             if (oldInterim) oldInterim.remove();
 
@@ -166,7 +165,6 @@
                 let transcript = e.results[i][0].transcript;
 
                 if (e.results[i].isFinal) {
-                    // 【多重表示対策】過去に一度でも確定処理したインデックスは二度と追加しない
                     if (i > lastProcessedIndex) {
                         addFinalBlock(transcript);
                         lastProcessedIndex = i;
@@ -186,7 +184,6 @@
             }
         };
 
-        // スマホの瞬断時負荷を考慮し、ウェイトを20msから200msへ安全に微調整
         recognition.onend = () => {
             if (isActive) {
                 clearTimeout(restartTimeoutId);
@@ -205,11 +202,9 @@
 
         recognition.onerror = (ev) => {
             console.warn("認識エラーハンドリング:", ev.error);
-            if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
-                // 自動リスタートに処理を委ねる
-            } else if (ev.error === 'not-allowed') {
+            if (ev.error === 'not-allowed') {
                 document.getElementById('engine-status').innerText = "マイク許可なし";
-                alert("マイクの使用が許可されていません。");
+                alert("マイクの使用が許可されていません。ブラウザの設定をご確認ください。");
             }
         };
     }
@@ -288,19 +283,13 @@
                 constraints.audio.deviceId = { exact: selectedMic };
             }
 
+            // モバイル環境での確実な動作のため、ストリームチェック後に解放し音声認識エンジンに委ねる
             const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            // 【認識率向上】Web Audio API を生成し、選択された倍率でマイク音量を実際に増幅（ブースト）
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioCtx.createMediaStreamSource(stream);
-            const gainNode = audioCtx.createGain();
-            
-            multiplier = parseFloat(document.getElementById('boost-select').value);
-            gainNode.gain.value = multiplier; 
-            
-            source.connect(gainNode);
+            stream.getTracks().forEach(track => track.stop());
 
-        } catch (e) { console.warn("オーディオストリーム初期化スキップ", e); }
+        } catch (e) { 
+            console.warn("マイク権限確認スキップまたは失敗:", e); 
+        }
 
         if (!recognition) {
             initRecognition();
