@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録 Pro - File Transcriber (画面最適化版)</title>
+    <title>逐語録 Pro - File Transcriber (2段レイアウト・500%ブースト版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         
@@ -11,8 +11,13 @@
         
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; position: relative; overflow: hidden; }
         
-        /* ツールバー全体の調整（柔軟な配置） */
-        .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; width: 100%; }
+        /* ツールバーを2段構成にするためのコンテナ */
+        .toolbar { background: #161b22; border-bottom: 1px solid var(--border); width: 100%; display: flex; flex-direction: column; }
+        
+        /* 各段（行）の基本スタイル */
+        .toolbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 15px; width: 100%; flex-wrap: wrap; }
+        .toolbar-row.top-row { border-bottom: 1px solid #21262d; } /* 1段目と2段目の区切り線 */
+        .toolbar-row.bottom-row { background: #1f242c; } /* 2段目（再生コントロール側）の背景をわずかに変えて区別 */
         
         .tool-group { display: flex; align-items: center; gap: 6px; position: relative; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
@@ -25,24 +30,21 @@
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
         #btn-stop { background: var(--danger); color: white; border: none; }
         
-        /* 再生コントロールパネルのレスポンシブ化 */
-        .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; flex: 1; min-width: 280px; }
-        
-        /* シークバーを画面サイズに合わせて伸縮 */
-        #seek-bar { flex: 1; min-width: 80px; }
+        /* 2段目の各要素の伸縮設定 */
+        #seek-bar { flex: 1; min-width: 120px; }
         
         .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; white-space: nowrap; }
         input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
         .vol-group, .speed-group { display: flex; align-items: center; gap: 4px; }
-        .vol-group input[type="range"], .speed-group input[type="range"] { width: 70px; }
+        .vol-group input[type="range"], .speed-group input[type="range"] { width: 80px; }
         .vol-text, .speed-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
 
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
-        /* 操作系ボタン（コピー・クリア等）のグループ */
-        .action-group { display: flex; gap: 8px; }
+        /* 操作系ボタン（コピー・クリア等）の右寄せ */
+        .action-group { display: flex; gap: 8px; margin-left: auto; }
         
         /* 文字起こし画面 */
         #log-screen { flex: 1; padding: 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; width: 100%; }
@@ -66,19 +68,10 @@
         }
         body.dragover #drop-overlay { opacity: 1; }
 
-        /* 💻 スマートフォンやタブレットなどの狭いウィンドウサイズ（画面幅950px以下）の時の調整 */
-        @media (max-width: 950px) {
-            .toolbar { gap: 8px; padding: 8px; }
-            .playback-panel { order: 3; width: 100%; flex: none; }
-            .action-group { margin-left: auto; }
-        }
-        
-        /* さらに狭い画面（スマホ縦持ちなど）の時の調整 */
-        @media (max-width: 580px) {
-            .tool-group { width: 100%; }
-            input[type="file"] { max-width: 100%; width: 100%; }
-            .action-group { width: 100%; justify-content: flex-end; order: 4; }
-            #btn-start, #btn-stop { flex: 1; text-align: center; }
+        /* 💻 ウィンドウサイズが狭い（スマホなど）ときの折り返し調整 */
+        @media (max-width: 768px) {
+            .action-group { margin-left: 0; width: 100%; justify-content: flex-end; }
+            .toolbar-row { padding: 8px; gap: 8px; }
         }
     </style>
 </head>
@@ -87,14 +80,25 @@
 <div id="drop-overlay">ここに音声または動画ファイルをドロップ</div>
 
 <div class="toolbar">
-    <div class="tool-group">
-        <label>ファイル:</label>
-        <input type="file" id="file-input" accept="audio/*,video/*">
+    <div class="toolbar-row top-row">
+        <div class="tool-group">
+            <label>ファイル:</label>
+            <input type="file" id="file-input" accept="audio/*,video/*">
+        </div>
+
+        <video id="media-preview"></video>
+
+        <button id="btn-start" disabled>文字起こし開始</button>
+        <button id="btn-stop" disabled>一時停止</button>
+        
+        <div class="action-group">
+            <button onclick="copyAll()">コピー</button>
+            <button onclick="saveAll()" style="color: var(--accent);">結果保存</button>
+            <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
+        </div>
     </div>
 
-    <video id="media-preview"></video>
-
-    <div class="playback-panel">
+    <div class="toolbar-row bottom-row">
         <span class="time-display" id="time-show">00:00 / 00:00</span>
         <input type="range" id="seek-bar" value="0" max="100" disabled>
         
@@ -111,24 +115,15 @@
         </div>
 
         <div class="tool-group">
-            <label style="color: #ffad33; font-weight: bold;">感度:</label>
+            <label style="color: #ffad33; font-weight: bold;">感度ブースト:</label>
             <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33; min-height: auto;">
-                <option value="1.0" selected>標準 (1.0x)</option>
-                <option value="1.5">1.5倍</option>
-                <option value="2.0">2.0倍</option>
-                <option value="3.0">3.0倍</option>
-                <option value="4.0">4.0倍</option>
+                <option value="1.0" selected>標準 (100%)</option>
+                <option value="2.0">200%</option>
+                <option value="3.0">300%</option>
+                <option value="4.0">400%</option>
+                <option value="5.0">500% 🔥</option>
             </select>
         </div>
-    </div>
-
-    <button id="btn-start" disabled>文字起こし開始</button>
-    <button id="btn-stop" disabled>一時停止</button>
-    
-    <div class="action-group">
-        <button onclick="copyAll()">コピー</button>
-        <button onclick="saveAll()" style="color: var(--accent);">結果保存</button>
-        <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
     </div>
 </div>
 
@@ -137,7 +132,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">ファイルを選択またはドロップしてください</span>
-        <span id="mode-status" style="color: var(--accent);">AUTO-LAYOUT OPTIMIZED</span>
+        <span id="mode-status" style="color: var(--accent);">2-ROW LAYOUT + 500% BOOST</span>
     </div>
 </div>
 
