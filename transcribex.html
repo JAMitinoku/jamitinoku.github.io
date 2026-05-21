@@ -526,7 +526,7 @@
         deviceSelect.disabled = true;
 
         await requestWakeLock(); 
-//        await startAudioAnalysis(deviceSelect.value);
+        await startAudioAnalysis(deviceSelect.value);
         initSpeechRecognition();
         
         try {
