@@ -24,7 +24,7 @@ const cmsData = {
     {
       id: 1,
       date: "2026年05月19日",
-      category: "総務",
+      category: "",
       title: "簡易文字起こしツール",
       content: "【PC】Googleの文字認識サーバ利用の文字起こしツール。",
       url: "https://jamitinoku.github.io/transcribex.html" // ← リンク先を指定
