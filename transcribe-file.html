@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録 Pro - File Transcriber (2段レイアウト・500%ブースト版)</title>
+    <title>逐語録 Pro - File Transcriber (音量500%爆音対応版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         
@@ -16,8 +16,8 @@
         
         /* 各段（行）の基本スタイル */
         .toolbar-row { display: flex; align-items: center; gap: 12px; padding: 10px 15px; width: 100%; flex-wrap: wrap; }
-        .toolbar-row.top-row { border-bottom: 1px solid #21262d; } /* 1段目と2段目の区切り線 */
-        .toolbar-row.bottom-row { background: #1f242c; } /* 2段目（再生コントロール側）の背景をわずかに変えて区別 */
+        .toolbar-row.top-row { border-bottom: 1px solid #21262d; } 
+        .toolbar-row.bottom-row { background: #1f242c; } 
         
         .tool-group { display: flex; align-items: center; gap: 6px; position: relative; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
@@ -38,8 +38,10 @@
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
         .vol-group, .speed-group { display: flex; align-items: center; gap: 4px; }
-        .vol-group input[type="range"], .speed-group input[type="range"] { width: 80px; }
-        .vol-text, .speed-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
+        .speed-group input[type="range"] { width: 80px; }
+        /* 音量スライダーは500%まで動かすため幅を少し広めに設定 */
+        .vol-group input[type="range"] { width: 100px; }
+        .vol-text, .speed-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 40px; }
 
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
@@ -68,7 +70,7 @@
         }
         body.dragover #drop-overlay { opacity: 1; }
 
-        /* 💻 ウィンドウサイズが狭い（スマホなど）ときの折り返し調整 */
+        /* ウィンドウサイズが狭いときの折り返し調整 */
         @media (max-width: 768px) {
             .action-group { margin-left: 0; width: 100%; justify-content: flex-end; }
             .toolbar-row { padding: 8px; gap: 8px; }
@@ -109,19 +111,19 @@
         </div>
 
         <div class="tool-group vol-group">
-            <label>音量:</label>
-            <input type="range" id="volume-bar" value="100" min="0" max="100">
+            <label style="color: #58a6ff; font-weight: bold;">音量:</label>
+            <input type="range" id="volume-bar" value="100" min="0" max="500" step="5">
             <span class="vol-text" id="volume-show">100%</span>
         </div>
 
         <div class="tool-group">
-            <label style="color: #ffad33; font-weight: bold;">感度ブースト:</label>
-            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33; min-height: auto;">
-                <option value="1.0" selected>標準 (100%)</option>
-                <option value="2.0">200%</option>
-                <option value="3.0">300%</option>
-                <option value="4.0">400%</option>
-                <option value="5.0">500% 🔥</option>
+            <label>感度ブースト:</label>
+            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; min-height: auto;">
+                <option value="1.0" selected>標準 (1.0x)</option>
+                <option value="1.5">1.5倍</option>
+                <option value="2.0">2.0倍</option>
+                <option value="3.0">3.0倍</option>
+                <option value="4.0">4.0倍</option>
             </select>
         </div>
     </div>
@@ -132,7 +134,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">ファイルを選択またはドロップしてください</span>
-        <span id="mode-status" style="color: var(--accent);">2-ROW LAYOUT + 500% BOOST</span>
+        <span id="mode-status" style="color: var(--accent);">VOLUME 500% BOOST ENABLED</span>
     </div>
 </div>
 
@@ -246,10 +248,12 @@
         mediaPreview.playbackRate = parseFloat(speedValue);
     };
 
+    // 【修正】音量を最大5.0倍（500%）まで動かせるようスクリプト側も同期
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
         if (gainNode) {
+            // 例: 500% の時は gain.value を 5.0 に設定する
             gainNode.gain.value = parseInt(volumeValue) / 100;
         }
     };
@@ -363,6 +367,7 @@
             sourceNode = audioCtx.createMediaElementSource(mediaPreview);
             
             gainNode = audioCtx.createGain();
+            // 初期再生時にも500%までのスライダー値を適用
             gainNode.gain.value = parseInt(volumeBar.value) / 100;
 
             boostNode = audioCtx.createGain();
