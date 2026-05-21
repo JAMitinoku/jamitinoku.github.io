@@ -3,16 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>逐語録 Pro - File Transcriber (コントロール完全版)</title>
+    <title>逐語録 Pro - File Transcriber (画面最適化版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; position: relative; }
         
-        .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+        * { box-sizing: border-box; }
+        
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; position: relative; overflow: hidden; }
+        
+        /* ツールバー全体の調整（柔軟な配置） */
+        .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; width: 100%; }
+        
         .tool-group { display: flex; align-items: center; gap: 6px; position: relative; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
         
-        button, select, input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: border-color 0.2s; }
+        button, select, input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: border-color 0.2s; min-height: 36px; }
         input[type="file"] { max-width: 150px; font-size: 11px; padding: 5px; }
         input[type="file"].dragover { border-color: var(--accent); background: #26354a; }
         button:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -20,35 +25,38 @@
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
         #btn-stop { background: var(--danger); color: white; border: none; }
         
-        /* 再生コントロール用のスタイル */
-        .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
-        .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
-        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
+        /* 再生コントロールパネルのレスポンシブ化 */
+        .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; flex: 1; min-width: 280px; }
+        
+        /* シークバーを画面サイズに合わせて伸縮 */
+        #seek-bar { flex: 1; min-width: 80px; }
+        
+        .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; white-space: nowrap; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; cursor: pointer; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
-        /* スライダー横のテキスト微調整 */
         .vol-group, .speed-group { display: flex; align-items: center; gap: 4px; }
         .vol-group input[type="range"], .speed-group input[type="range"] { width: 70px; }
         .vol-text, .speed-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
 
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
-        .action-group { margin-left: auto; display: flex; gap: 8px; }
-        @media (max-width: 768px) {
-            .action-group { margin-left: 0; width: 100%; justify-content: flex-end; margin-top: 4px; }
-        }
+        /* 操作系ボタン（コピー・クリア等）のグループ */
+        .action-group { display: flex; gap: 8px; }
         
-        #log-screen { flex: 1; padding: 20px 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
+        /* 文字起こし画面 */
+        #log-screen { flex: 1; padding: 20px; overflow-y: auto; font-size: 18px; line-height: 1.6; width: 100%; }
         .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; transition: background 0.2s; }
         .block:hover { background: #161b22; cursor: text; }
         .block:focus { outline: none; background: #1f242c; border-left-color: #ffad33; border-radius: 0 4px 4px 0; padding-right: 8px; }
         
         .interim-live { color: #8b949e; font-style: italic; border-left: 2px dashed #6e7681; padding-left: 12px; margin-bottom: 0.8em; min-height: 1.6em; word-break: break-all; }
         
-        .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
-        #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
+        /* ステータスバー */
+        .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); width: 100%; }
+        #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 
-        /* 全画面ドラッグオーバー時のオーバーレイ表示 */
+        /* 全画面ドラッグオーバー時のオーバーレイ */
         #drop-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(13, 17, 23, 0.85); border: 3px dashed var(--accent);
@@ -57,6 +65,21 @@
             z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 0.2s;
         }
         body.dragover #drop-overlay { opacity: 1; }
+
+        /* 💻 スマートフォンやタブレットなどの狭いウィンドウサイズ（画面幅950px以下）の時の調整 */
+        @media (max-width: 950px) {
+            .toolbar { gap: 8px; padding: 8px; }
+            .playback-panel { order: 3; width: 100%; flex: none; }
+            .action-group { margin-left: auto; }
+        }
+        
+        /* さらに狭い画面（スマホ縦持ちなど）の時の調整 */
+        @media (max-width: 580px) {
+            .tool-group { width: 100%; }
+            input[type="file"] { max-width: 100%; width: 100%; }
+            .action-group { width: 100%; justify-content: flex-end; order: 4; }
+            #btn-start, #btn-stop { flex: 1; text-align: center; }
+        }
     </style>
 </head>
 <body>
@@ -88,8 +111,8 @@
         </div>
 
         <div class="tool-group">
-            <label style="color: #ffad33; font-weight: bold;">感度ブースト:</label>
-            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33;">
+            <label style="color: #ffad33; font-weight: bold;">感度:</label>
+            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33; min-height: auto;">
                 <option value="1.0" selected>標準 (1.0x)</option>
                 <option value="1.5">1.5倍</option>
                 <option value="2.0">2.0倍</option>
@@ -114,7 +137,7 @@
 <div class="monitor">
     <div id="status-bar">
         <span id="engine-status">ファイルを選択またはドロップしてください</span>
-        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED + BOOST</span>
+        <span id="mode-status" style="color: var(--accent);">AUTO-LAYOUT OPTIMIZED</span>
     </div>
 </div>
 
@@ -135,16 +158,14 @@
     const btnStop = document.getElementById('btn-stop');
     const engineStatus = document.getElementById('engine-status');
     
-    // コントロール要素
     const seekBar = document.getElementById('seek-bar');
     const timeShow = document.getElementById('time-show');
-    const speedBar = document.getElementById('speed-bar'); // 変更
-    const speedShow = document.getElementById('speed-show'); // 追加
+    const speedBar = document.getElementById('speed-bar');
+    const speedShow = document.getElementById('speed-show');
     const volumeBar = document.getElementById('volume-bar');
     const volumeShow = document.getElementById('volume-show');
     const boostSelect = document.getElementById('boost-select');
 
-    // ファイル処理の共通ロジック
     function handleFile(file) {
         if (!file) return;
         if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
@@ -171,12 +192,10 @@
         engineStatus.innerText = "READY: " + file.name;
     }
 
-    // ① 通常のファイル選択ボタン経由
     fileInput.onchange = (e) => {
         handleFile(e.target.files[0]);
     };
 
-    // ② ドラッグ＆ドロップ処理
     window.addEventListener('dragover', (e) => {
         e.preventDefault();
         document.body.classList.add('dragover');
@@ -199,12 +218,10 @@
         }
     });
 
-    // メディアのメタデータ読み込み完了時
     mediaPreview.onloadedmetadata = () => {
         updateTimeDisplay();
     };
 
-    // 再生位置が更新されたとき
     mediaPreview.ontimeupdate = () => {
         if (!mediaPreview.duration) return;
         if (!seekBar.dataset.dragging) {
@@ -214,7 +231,6 @@
         updateTimeDisplay();
     };
 
-    // シークバーを操作したときの処理
     seekBar.oninput = () => {
         seekBar.dataset.dragging = "true";
     };
@@ -222,23 +238,19 @@
     seekBar.onchange = () => {
         if (!mediaPreview.duration) return;
         const newTime = (seekBar.value / 100) * mediaPreview.duration;
-        
         mediaPreview.currentTime = newTime;
         seekBar.removeAttribute('data-dragging');
-
         if (isActive) {
             forceResetEngine();
         }
     };
 
-    // 【変更】再生速度スライダーの変更処理（0.1刻み）
     speedBar.oninput = () => {
         const speedValue = parseFloat(speedBar.value).toFixed(1);
         speedShow.innerText = speedValue + "x";
         mediaPreview.playbackRate = parseFloat(speedValue);
     };
 
-    // 音量スライダーの変更処理
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -247,14 +259,12 @@
         }
     };
 
-    // 感度ブーストの変更処理
     boostSelect.onchange = () => {
         if (boostNode) {
             boostNode.gain.value = parseFloat(boostSelect.value);
         }
     };
 
-    // 時間表示のフォーマット関数
     function formatTime(seconds) {
         if (isNaN(seconds)) return "00:00";
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -288,7 +298,6 @@
             if (oldInterim) oldInterim.remove();
 
             let interimText = '';
-
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
                 if (e.results[i].isFinal) {
@@ -345,7 +354,6 @@
         }
     };
 
-    // 開始ボタン
     btnStart.onclick = async () => {
         if (!mediaPreview.src) return;
 
@@ -382,9 +390,7 @@
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
-            // 【変更】現在のスライダー値から再生速度を設定
             mediaPreview.playbackRate = parseFloat(speedBar.value);
-            
             recognition.start();
             mediaPreview.play(); 
         } catch (e) {
@@ -393,7 +399,6 @@
         }
     };
 
-    // 一時停止ボタン
     btnStop.onclick = () => {
         stopTranscribing();
         engineStatus.innerText = "PAUSED (一時停止中)";
@@ -405,7 +410,6 @@
         btnStart.disabled = false;
         btnStop.disabled = true;
         fileInput.disabled = false;
-        
         mediaPreview.pause(); 
 
         const oldInterim = document.getElementById('interim-live-block');
