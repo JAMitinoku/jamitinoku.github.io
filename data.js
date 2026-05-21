@@ -17,17 +17,17 @@ const cmsData = {
       id: 2,
       date: "2026年05月19日",
       category: "",
-      title: "NDLOCR-Lite Web",
-      content: "国立国会図書館が開発した、AI利用の日本語OCR",
-      url: "https://ndlocr-liteweb.netlify.app/" // ← リンクがない場合は空欄にするだけ
+      title: "簡易文字起こしツール（スマホ）",
+      content: "Googleの文字認識サーバ利用の文字起こしツール。Chrome推奨",
+      url: "https://jamitinoku.github.io/transcribes.html" // ← リンク先を指定
     },
     {
       id: 1,
       date: "2026年05月19日",
       category: "",
-      title: "簡易文字起こしツール",
+      title: "簡易文字起こしツール（PC）",
       content: "Googleの文字認識サーバ利用の文字起こしツール。Chrome推奨",
-      url: "https://jamitinoku.github.io/transcribes.html" // ← リンク先を指定
+      url: "https://jamitinoku.github.io/transcribex.html" // ← リンク先を指定
     }
   ]
 };
