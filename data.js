@@ -6,7 +6,7 @@ const cmsData = {
   
   news: [
     {
-      id: 3,
+      id: 4,
       date: "2026年05月20日",
       category: "管理",
       title: "録音ファイルから文字起こし",
@@ -14,7 +14,7 @@ const cmsData = {
       url: "https://jamitinoku.github.io/transcribe-file.html" // ← リンクがない場合は空欄にするだけ
     },
     {
-      id: 2,
+      id: 3,
       date: "2026年05月19日",
       category: "",
       title: "NDLOCR-Lite Web",
@@ -22,11 +22,19 @@ const cmsData = {
       url: "https://ndlocr-liteweb.netlify.app/" // ← リンクがない場合は空欄にするだけ
     },
     {
+      id: 2,
+      date: "2026年05月22日",
+      category: "総務",
+      title: "簡易文字起こしツール",
+      content: "【スマホ】Googleの文字認識サーバ利用の文字起こしツール。",
+      url: "https://jamitinoku.github.io/transcribex.html" // ← リンク先を指定
+    }
+    {
       id: 1,
       date: "2026年05月19日",
       category: "総務",
       title: "簡易文字起こしツール",
-      content: "Googleの文字認識サーバ利用の文字起こしツール。Chrome推奨",
+      content: "【PC】Googleの文字認識サーバ利用の文字起こしツール。",
       url: "https://jamitinoku.github.io/transcribex.html" // ← リンク先を指定
     }
   ]
