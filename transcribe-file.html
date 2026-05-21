@@ -26,10 +26,10 @@
         input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
-        /* ボリューム調整用の微調整 */
-        .vol-group { display: flex; align-items: center; gap: 4px; }
-        .vol-group input[type="range"] { width: 70px; }
-        .vol-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 30px; }
+        /* スライダー横のテキスト微調整 */
+        .vol-group, .speed-group { display: flex; align-items: center; gap: 4px; }
+        .vol-group input[type="range"], .speed-group input[type="range"] { width: 70px; }
+        .vol-text, .speed-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
 
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
@@ -75,16 +75,10 @@
         <span class="time-display" id="time-show">00:00 / 00:00</span>
         <input type="range" id="seek-bar" value="0" max="100" disabled>
         
-        <div class="tool-group">
+        <div class="tool-group speed-group">
             <label>速度:</label>
-            <select id="speed-select" style="padding: 4px 8px; font-size: 11px;">
-                <option value="0.5">0.5x</option>
-                <option value="0.75">0.75x</option>
-                <option value="1.0" selected>1.0x</option>
-                <option value="1.25">1.25x</option>
-                <option value="1.5">1.5x</option>
-                <option value="2.0">2.0x</option>
-            </select>
+            <input type="range" id="speed-bar" value="1.0" min="0.5" max="2.0" step="0.1">
+            <span class="speed-text" id="speed-show">1.0x</span>
         </div>
 
         <div class="tool-group vol-group">
@@ -144,7 +138,8 @@
     // コントロール要素
     const seekBar = document.getElementById('seek-bar');
     const timeShow = document.getElementById('time-show');
-    const speedSelect = document.getElementById('speed-select');
+    const speedBar = document.getElementById('speed-bar'); // 変更
+    const speedShow = document.getElementById('speed-show'); // 追加
     const volumeBar = document.getElementById('volume-bar');
     const volumeShow = document.getElementById('volume-show');
     const boostSelect = document.getElementById('boost-select');
@@ -157,7 +152,6 @@
             return;
         }
 
-        // 文字起こし実行中に新しいファイルが読み込まれたら一度停止
         if (isActive) {
             stopTranscribing();
         }
@@ -182,7 +176,7 @@
         handleFile(e.target.files[0]);
     };
 
-    // ② ドラッグ＆ドロップ処理（画面全体でのドロップ対応）
+    // ② ドラッグ＆ドロップ処理
     window.addEventListener('dragover', (e) => {
         e.preventDefault();
         document.body.classList.add('dragover');
@@ -190,7 +184,6 @@
 
     window.addEventListener('dragleave', (e) => {
         e.preventDefault();
-        // 画面外に離れた、または子要素に移動した際の間違った非表示を防ぐ処理
         if (e.clientX === 0 && e.clientY === 0) {
             document.body.classList.remove('dragover');
         }
@@ -202,17 +195,16 @@
         
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             handleFile(e.dataTransfer.files[0]);
-            // input[type=file]側にも値を同期（不要な場合はスキップ可ですが親切設計のため）
             fileInput.files = e.dataTransfer.files;
         }
     });
 
-    // メディアのメタデータ読み込み完了時（総時間の表示更新）
+    // メディアのメタデータ読み込み完了時
     mediaPreview.onloadedmetadata = () => {
         updateTimeDisplay();
     };
 
-    // 再生位置が更新されたとき（シークバーと時間の同期）
+    // 再生位置が更新されたとき
     mediaPreview.ontimeupdate = () => {
         if (!mediaPreview.duration) return;
         if (!seekBar.dataset.dragging) {
@@ -239,12 +231,14 @@
         }
     };
 
-    // 再生速度の変更
-    speedSelect.onchange = () => {
-        mediaPreview.playbackRate = parseFloat(speedSelect.value);
+    // 【変更】再生速度スライダーの変更処理（0.1刻み）
+    speedBar.oninput = () => {
+        const speedValue = parseFloat(speedBar.value).toFixed(1);
+        speedShow.innerText = speedValue + "x";
+        mediaPreview.playbackRate = parseFloat(speedValue);
     };
 
-    // 音量スライダーの変更処理（自分が聴く用）
+    // 音量スライダーの変更処理
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -253,14 +247,14 @@
         }
     };
 
-    // 感度ブーストの変更処理（文字起こしエンジンに送る用）
+    // 感度ブーストの変更処理
     boostSelect.onchange = () => {
         if (boostNode) {
             boostNode.gain.value = parseFloat(boostSelect.value);
         }
     };
 
-    // 時間表示のフォーマット関数 (mm:ss)
+    // 時間表示のフォーマット関数
     function formatTime(seconds) {
         if (isNaN(seconds)) return "00:00";
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -388,7 +382,8 @@
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
-            mediaPreview.playbackRate = parseFloat(speedSelect.value);
+            // 【変更】現在のスライダー値から再生速度を設定
+            mediaPreview.playbackRate = parseFloat(speedBar.value);
             
             recognition.start();
             mediaPreview.play(); 
