@@ -6,36 +6,30 @@
     <title>逐語録 Pro - File Transcriber (コントロール完全版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; position: relative; }
         
         .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-        .tool-group { display: flex; align-items: center; gap: 6px; }
+        .tool-group { display: flex; align-items: center; gap: 6px; position: relative; }
         label { font-size: 11px; color: #8b949e; white-space: nowrap; }
         
-        button, select, input[type="range"], input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        button, select, input[type="file"] { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; transition: border-color 0.2s; }
         input[type="file"] { max-width: 150px; font-size: 11px; padding: 5px; }
+        input[type="file"].dragover { border-color: var(--accent); background: #26354a; }
         button:disabled { opacity: 0.4; cursor: not-allowed; }
         
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
         #btn-stop { background: var(--danger); color: white; border: none; }
         
+        /* 再生コントロール用のスタイル */
         .playback-panel { display: flex; align-items: center; gap: 12px; background: #1f242c; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); flex-wrap: wrap; }
         .time-display { font-family: monospace; font-size: 12px; color: #8b949e; min-width: 85px; text-align: center; }
-        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; padding: 0; }
+        input[type="range"] { -webkit-appearance: none; appearance: none; background: #30363d; height: 6px; border-radius: 3px; outline: none; width: 120px; cursor: pointer; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); cursor: pointer; }
         
-        .vol-group, .boost-group { display: flex; align-items: center; gap: 4px; }
-        .vol-group input[type="range"] { width: 80px; }
-        .boost-group input[type="range"] { width: 90px; border-color: #ffad33; }
-        .vol-text, .boost-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 35px; }
-
-        .filler-group { display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer; user-select: none; }
-        .filler-group input[type="checkbox"] { cursor: pointer; margin: 0; width: 14px; height: 14px; }
-
-        .visualizer-group { display: flex; align-items: center; gap: 8px; background: #11141a; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border); }
-        .meter-container { width: 60px; height: 12px; background: #222; border-radius: 2px; overflow: hidden; position: relative; border: 1px solid #444; }
-        .meter-bar { width: 0%; height: 100%; background: linear-gradient(to right, #238636 70%, #ffad33 85%, #f85149 100%); transition: width 0.05s linear; }
-        .v-canvas { width: 100px; height: 24px; background: #000; border-radius: 3px; border: 1px solid #333; }
+        /* ボリューム調整用の微調整 */
+        .vol-group { display: flex; align-items: center; gap: 4px; }
+        .vol-group input[type="range"] { width: 70px; }
+        .vol-text { font-family: monospace; font-size: 11px; color: #8b949e; min-width: 30px; }
 
         #media-preview { height: 32px; max-width: 100px; background: #000; display: none; border-radius: 4px; }
         
@@ -53,9 +47,21 @@
         
         .monitor { background: #010409; padding: 10px 20px; border-top: 1px solid var(--border); }
         #status-bar { font-size: 10px; color: #6e7681; display: flex; justify-content: space-between; }
+
+        /* 全画面ドラッグオーバー時のオーバーレイ表示 */
+        #drop-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(13, 17, 23, 0.85); border: 3px dashed var(--accent);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: var(--accent); font-weight: bold;
+            z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 0.2s;
+        }
+        body.dragover #drop-overlay { opacity: 1; }
     </style>
 </head>
 <body>
+
+<div id="drop-overlay">ここに音声または動画ファイルをドロップ</div>
 
 <div class="toolbar">
     <div class="tool-group">
@@ -83,31 +89,19 @@
 
         <div class="tool-group vol-group">
             <label>音量:</label>
-            <input type="range" id="volume-bar" value="100" min="0" max="500"> <span class="vol-text" id="volume-show">100%</span>
+            <input type="range" id="volume-bar" value="100" min="0" max="100">
+            <span class="vol-text" id="volume-show">100%</span>
         </div>
 
-        <div class="tool-group boost-group">
+        <div class="tool-group">
             <label style="color: #ffad33; font-weight: bold;">感度ブースト:</label>
-            <input type="range" id="boost-slider" value="1" min="1" max="10" step="1" style="accent-color: #ffad33;">
-            <span class="boost-text" id="boost-show" style="color: #ffad33; font-weight: bold; font-family: monospace; font-size: 11px;">1倍</span>
-        </div>
-
-        <label class="filler-group">
-            <input type="checkbox" id="filler-check" checked>
-            <span>フィラー削除</span>
-        </label>
-
-        <div class="visualizer-group">
-            <div class="tool-group">
-                <label style="font-size: 9px;">レベル:</label>
-                <div class="meter-container">
-                    <div id="level-meter-bar" class="meter-bar"></div>
-                </div>
-            </div>
-            <div class="tool-group">
-                <label style="font-size: 9px;">感度波形:</label>
-                <canvas id="waveform-canvas" class="v-canvas"></canvas>
-            </div>
+            <select id="boost-select" style="padding: 4px 8px; font-size: 11px; border-color: #ffad33;">
+                <option value="1.0" selected>標準 (1.0x)</option>
+                <option value="1.5">1.5倍</option>
+                <option value="2.0">2.0倍</option>
+                <option value="3.0">3.0倍</option>
+                <option value="4.0">4.0倍</option>
+            </select>
         </div>
     </div>
 
@@ -125,8 +119,8 @@
 
 <div class="monitor">
     <div id="status-bar">
-        <span id="engine-status">ファイルを選択してください</span>
-        <span id="mode-status" style="color: var(--accent);">FILE-MIC HYBRID OPTIMIZED (MOBILE FIX)</span>
+        <span id="engine-status">ファイルを選択またはドロップしてください</span>
+        <span id="mode-status" style="color: var(--accent);">FILE-CONTROL OPTIMIZED + BOOST</span>
     </div>
 </div>
 
@@ -134,16 +128,12 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let lastProcessedIndex = -1; 
     
     let audioCtx = null;
     let sourceNode = null;
     let gainNode = null; 
     let boostNode = null; 
-    let analyserMeter = null;  
-    let analyserBoost = null;  
-    let drawVisualId = null;
-    let micStream = null; // スマホ対応用マイクストリーム
+    let destNode = null;
 
     const fileInput = document.getElementById('file-input');
     const mediaPreview = document.getElementById('media-preview');
@@ -151,22 +141,26 @@
     const btnStop = document.getElementById('btn-stop');
     const engineStatus = document.getElementById('engine-status');
     
+    // コントロール要素
     const seekBar = document.getElementById('seek-bar');
     const timeShow = document.getElementById('time-show');
     const speedSelect = document.getElementById('speed-select');
     const volumeBar = document.getElementById('volume-bar');
     const volumeShow = document.getElementById('volume-show');
-    const boostSlider = document.getElementById('boost-slider'); 
-    const boostShow = document.getElementById('boost-show');
-    const fillerCheck = document.getElementById('filler-check');
+    const boostSelect = document.getElementById('boost-select');
 
-    const levelMeterBar = document.getElementById('level-meter-bar');
-    const waveformCanvas = document.getElementById('waveform-canvas');
-    const canvasCtx = waveformCanvas.getContext('2d');
-
-    fileInput.onchange = (e) => {
-        const file = e.target.files[0];
+    // ファイル処理の共通ロジック
+    function handleFile(file) {
         if (!file) return;
+        if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
+            alert('音声または動画ファイルを選択してください。');
+            return;
+        }
+
+        // 文字起こし実行中に新しいファイルが読み込まれたら一度停止
+        if (isActive) {
+            stopTranscribing();
+        }
 
         const fileURL = URL.createObjectURL(file);
         mediaPreview.src = fileURL;
@@ -181,12 +175,44 @@
         seekBar.disabled = false;
         seekBar.value = 0;
         engineStatus.innerText = "READY: " + file.name;
+    }
+
+    // ① 通常のファイル選択ボタン経由
+    fileInput.onchange = (e) => {
+        handleFile(e.target.files[0]);
     };
 
+    // ② ドラッグ＆ドロップ処理（画面全体でのドロップ対応）
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        document.body.classList.add('dragover');
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        // 画面外に離れた、または子要素に移動した際の間違った非表示を防ぐ処理
+        if (e.clientX === 0 && e.clientY === 0) {
+            document.body.classList.remove('dragover');
+        }
+    });
+
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        document.body.classList.remove('dragover');
+        
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            handleFile(e.dataTransfer.files[0]);
+            // input[type=file]側にも値を同期（不要な場合はスキップ可ですが親切設計のため）
+            fileInput.files = e.dataTransfer.files;
+        }
+    });
+
+    // メディアのメタデータ読み込み完了時（総時間の表示更新）
     mediaPreview.onloadedmetadata = () => {
         updateTimeDisplay();
     };
 
+    // 再生位置が更新されたとき（シークバーと時間の同期）
     mediaPreview.ontimeupdate = () => {
         if (!mediaPreview.duration) return;
         if (!seekBar.dataset.dragging) {
@@ -196,6 +222,7 @@
         updateTimeDisplay();
     };
 
+    // シークバーを操作したときの処理
     seekBar.oninput = () => {
         seekBar.dataset.dragging = "true";
     };
@@ -212,10 +239,12 @@
         }
     };
 
+    // 再生速度の変更
     speedSelect.onchange = () => {
         mediaPreview.playbackRate = parseFloat(speedSelect.value);
     };
 
+    // 音量スライダーの変更処理（自分が聴く用）
     volumeBar.oninput = () => {
         const volumeValue = volumeBar.value;
         volumeShow.innerText = volumeValue + "%";
@@ -224,15 +253,14 @@
         }
     };
 
-    boostSlider.oninput = () => {
-        const boostValue = boostSlider.value;
-        boostShow.innerText = boostValue + "倍";
+    // 感度ブーストの変更処理（文字起こしエンジンに送る用）
+    boostSelect.onchange = () => {
         if (boostNode) {
-            // スライダーを動かした際のオーディオノード連携は維持
-            boostNode.gain.value = parseFloat(boostValue);
+            boostNode.gain.value = parseFloat(boostSelect.value);
         }
     };
 
+    // 時間表示のフォーマット関数 (mm:ss)
     function formatTime(seconds) {
         if (isNaN(seconds)) return "00:00";
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -242,62 +270,6 @@
 
     function updateTimeDisplay() {
         timeShow.innerText = `${formatTime(mediaPreview.currentTime)} / ${formatTime(mediaPreview.duration)}`;
-    }
-
-    function startVisualizer() {
-        if (!analyserMeter || !analyserBoost) return;
-
-        const bufferLengthMeter = analyserMeter.fftSize;
-        const dataArrayMeter = new Uint8Array(bufferLengthMeter);
-
-        const bufferLengthBoost = analyserBoost.frequencyBinCount;
-        const dataArrayBoost = new Uint8Array(bufferLengthBoost);
-
-        const draw = () => {
-            if (!isActive) {
-                levelMeterBar.style.width = '0%';
-                return;
-            }
-            drawVisualId = requestAnimationFrame(draw);
-
-            analyserMeter.getByteTimeDomainData(dataArrayMeter);
-            let sumSquares = 0;
-            for (let i = 0; i < bufferLengthMeter; i++) {
-                const norm = (dataArrayMeter[i] - 128) / 128;
-                sumSquares += norm * norm;
-            }
-            const rms = Math.sqrt(sumSquares / bufferLengthMeter);
-            let levelPercent = Math.min(100, Math.floor(rms * 250));
-            levelMeterBar.style.width = levelPercent + '%';
-
-            analyserBoost.getByteTimeDomainData(dataArrayBoost);
-            canvasCtx.fillStyle = '#000000';
-            canvasCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
-            
-            canvasCtx.lineWidth = 1.5;
-            canvasCtx.strokeStyle = '#ffad33'; 
-            canvasCtx.beginPath();
-
-            const sliceWidth = waveformCanvas.width * 1.0 / bufferLengthBoost;
-            let x = 0;
-
-            for (let i = 0; i < bufferLengthBoost; i++) {
-                const v = dataArrayBoost[i] / 128.0;
-                const y = v * waveformCanvas.height / 2;
-
-                if (i === 0) {
-                    canvasCtx.moveTo(x, y);
-                } else {
-                    canvasCtx.lineTo(x, y);
-                }
-                x += sliceWidth;
-            }
-
-            canvasCtx.lineTo(waveformCanvas.width, waveformCanvas.height / 2);
-            canvasCtx.stroke();
-        };
-
-        draw();
     }
 
     function initRecognition() {
@@ -314,7 +286,6 @@
 
         recognition.onstart = () => {
             engineStatus.innerText = "PROCESSING (文字起こし中...)";
-            lastProcessedIndex = -1; 
         };
 
         recognition.onresult = (e) => {
@@ -327,10 +298,7 @@
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
                 if (e.results[i].isFinal) {
-                    if (i > lastProcessedIndex) {
-                        addFinalBlock(transcript);
-                        lastProcessedIndex = i;
-                    }
+                    addFinalBlock(transcript);
                 } else {
                     interimText += transcript;
                 }
@@ -353,7 +321,7 @@
                     if (isActive && recognition) {
                         try { recognition.start(); } catch(err) { forceResetEngine(); }
                     }
-                }, 200); 
+                }, 20); 
             }
         };
 
@@ -361,8 +329,6 @@
             console.warn("認識エラー:", ev.error);
             if (ev.error === 'no-speech' || ev.error === 'audio-capture' || ev.error === 'aborted') {
                 try { recognition.stop(); } catch(e){}
-            } else if (ev.error === 'not-allowed') {
-                alert("マイクの使用許可がないためスマホでのファイル起こしが起動できません。設定をご確認ください。");
             }
         };
     }
@@ -385,6 +351,7 @@
         }
     };
 
+    // 開始ボタン
     btnStart.onclick = async () => {
         if (!mediaPreview.src) return;
 
@@ -394,15 +361,6 @@
         fileInput.disabled = true;
         engineStatus.innerText = "CONNECTING";
 
-        // 【スマホ対応のコア修正】
-        // スマホで文字起こしを遮断されないよう、一度本物のマイク権限をリクエストして
-        // 音声認識エンジン（SpeechRecognition）のルートを正常に開通させます。
-        try {
-            micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch(e) {
-            console.warn("マイクアクセス失敗、スピーカー音の自己録音モードを開始します", e);
-        }
-
         if (!audioCtx) {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             sourceNode = audioCtx.createMediaElementSource(mediaPreview);
@@ -411,24 +369,15 @@
             gainNode.gain.value = parseInt(volumeBar.value) / 100;
 
             boostNode = audioCtx.createGain();
-            boostNode.gain.value = parseFloat(boostSlider.value);
+            boostNode.gain.value = parseFloat(boostSelect.value);
 
-            analyserMeter = audioCtx.createAnalyser(); 
-            analyserMeter.fftSize = 256;
+            destNode = audioCtx.createMediaStreamDestination();
             
-            analyserBoost = audioCtx.createAnalyser(); 
-            analyserBoost.fftSize = 256;
-
-            // 視覚的なメーターと波形キャンバスを動かすためのルート
-            sourceNode.connect(analyserMeter);
             sourceNode.connect(gainNode);
             gainNode.connect(audioCtx.destination);
 
             sourceNode.connect(boostNode);
-            boostNode.connect(analyserBoost);
-
-            waveformCanvas.width = waveformCanvas.clientWidth;
-            waveformCanvas.height = waveformCanvas.clientHeight;
+            boostNode.connect(destNode);
         }
 
         if (!recognition) {
@@ -441,17 +390,15 @@
             }
             mediaPreview.playbackRate = parseFloat(speedSelect.value);
             
-            // 音声認識エンジンを起動し、ファイルを再生（スマホのスピーカー出力をそのままマイクで拾わせる）
             recognition.start();
             mediaPreview.play(); 
-            
-            startVisualizer();
         } catch (e) {
             console.error(e);
             forceResetEngine();
         }
     };
 
+    // 一時停止ボタン
     btnStop.onclick = () => {
         stopTranscribing();
         engineStatus.innerText = "PAUSED (一時停止中)";
@@ -460,17 +407,11 @@
     function stopTranscribing() {
         isActive = false;
         clearTimeout(restartTimeoutId);
-        cancelAnimationFrame(drawVisualId);
         btnStart.disabled = false;
         btnStop.disabled = true;
         fileInput.disabled = false;
         
         mediaPreview.pause(); 
-
-        if (micStream) {
-            micStream.getTracks().forEach(track => track.stop());
-            micStream = null;
-        }
 
         const oldInterim = document.getElementById('interim-live-block');
         if (oldInterim) oldInterim.remove();
@@ -478,19 +419,14 @@
         if (recognition) {
             try { recognition.stop(); } catch(e){}
         }
-        
-        if (levelMeterBar) levelMeterBar.style.width = '0%';
     }
 
     function addFinalBlock(text) {
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        if (fillerCheck.checked) {
-            const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-            cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
-        }
-        
+        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
+        cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
 
         const screen = document.getElementById('log-screen');
