@@ -255,11 +255,14 @@
     let isActive = false; 
     let audioContext = null;
     let audioSource = null;
-    let gainNode = null; // ブースト機能用のゲインノード
+    let gainNode = null; 
     let analyser = null;
     let animationFrameId = null;
     let currentStream = null;
     let reconnectTimeoutId = null;
+
+    // ★追加: Wake Lock（スリープ防止）用の変数
+    let wakeLock = null;
 
     // 感度選択のプルダウン生成
     for (let i = 1; i <= 100; i++) {
@@ -285,6 +288,40 @@
             statusBadge.style.background = 'var(--warning)';
         } else {
             statusBadge.style.background = '#6c757d';
+        }
+    }
+
+    // ★追加: スリープ禁止をリクエストする関数
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                log("スリープ防止機能（Wake Lock）が有効になりました。");
+                
+                // タブの切り替えなどでロックが外れた場合の再取得処理
+                wakeLock.addEventListener('release', () => {
+                    if (isActive) {
+                        log("Wake Lockが解除されました。再取得を試みます...");
+                    }
+                });
+            } catch (err) {
+                log(`スリープ防止の有効化に失敗: ${err.message}`);
+            }
+        } else {
+            log("お使いのブラウザはスリープ防止機能（Wake Lock API）をサポートしていません。");
+        }
+    }
+
+    // ★追加: スリープ禁止を解除する関数
+    async function releaseWakeLock() {
+        if (wakeLock !== null) {
+            try {
+                await wakeLock.release();
+                wakeLock = null;
+                log("スリープ防止機能（Wake Lock）を解除しました。");
+            } catch (err) {
+                log(`スリープ防止の解除に失敗: ${err.message}`);
+            }
         }
     }
 
@@ -323,14 +360,12 @@
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
             audioSource = audioContext.createMediaStreamSource(currentStream);
             
-            // 【ブースト機能】GainNodeの作成と接続
             gainNode = audioContext.createGain();
-            gainNode.gain.value = parseFloat(boostSelect.value); // 初期設定倍率
+            gainNode.gain.value = parseFloat(boostSelect.value); 
 
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
 
-            // ストリーム -> ゲイン(増幅) -> アナライザーの順で接続
             audioSource.connect(gainNode);
             gainNode.connect(analyser);
 
@@ -344,7 +379,6 @@
             sensitivitySelect.onchange = updateMarker;
             updateMarker();
 
-            // リアルタイムでのブースト倍率変更に対応
             boostSelect.onchange = () => {
                 if (gainNode) {
                     gainNode.gain.value = parseFloat(boostSelect.value);
@@ -425,6 +459,7 @@
             } else {
                 updateStatus('切断');
                 log("音声認識を停止しました。");
+                releaseWakeLock(); // ★追加：完全に終了したらスリープ禁止を解除
             }
         };
 
@@ -468,6 +503,7 @@
         btnStop.disabled = false;
         deviceSelect.disabled = true;
 
+        await requestWakeLock(); // ★追加：開始時にスリープ禁止を要求
         await startAudioAnalysis(deviceSelect.value);
         initSpeechRecognition();
         
@@ -479,10 +515,11 @@
             btnStart.disabled = false;
             btnStop.disabled = true;
             deviceSelect.disabled = false;
+            await releaseWakeLock(); // ★追加：失敗時は解除
         }
     });
 
-    btnStop.addEventListener('click', () => {
+    btnStop.addEventListener('click', async () => {
         if (!isActive) return;
         isActive = false;
         btnStart.disabled = false;
@@ -503,6 +540,8 @@
         sensitivityGauge.style.width = '0%';
         interimArea.textContent = '';
         updateStatus('切断');
+        
+        await releaseWakeLock(); // ★追加：手動停止時にスリープ禁止を解除
     });
 
     btnCopy.addEventListener('click', () => {
@@ -518,7 +557,6 @@
         });
     });
 
-    // 【認識結果ダウンロード機能】
     btnDownload.addEventListener('click', () => {
         const text = finalArea.innerText;
         if (!text) {
@@ -527,7 +565,6 @@
             return;
         }
 
-        // 現在日時からファイル名を生成 (例: transcribe_20260521_123456.txt)
         const now = new Date();
         const yyyy = now.getFullYear();
         const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -537,7 +574,6 @@
         const ss = String(now.getSeconds()).padStart(2, '0');
         const filename = `transcribe_${yyyy}${mm}${dd}_${hh}${min}${ss}.txt`;
 
-        // Blobオブジェクトを作成してダウンロードリンクをトリガー
         const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -567,6 +603,13 @@
         initDevices();
         deviceSelect.addEventListener('change', () => {
             log("音声入力デバイスが切り替えられました。");
+        });
+        
+        // ★追加: 別のタブに移動して戻ってきたときに、もし認識中ならスリープ防止を再適用する
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible' && isActive) {
+                await requestWakeLock();
+            }
         });
     });
 </script>
