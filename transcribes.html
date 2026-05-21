@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>逐語録システム（細切れ対策版）</title>
+    <title>逐語録システム（スマホ認識重視版）</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
@@ -59,9 +59,6 @@
             color: #856404;
             margin-bottom: 6px;
             flex-shrink: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .config-box {
@@ -71,16 +68,9 @@
             border-radius: 8px;
             margin-bottom: 6px;
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             gap: 6px;
             flex-shrink: 0;
-        }
-        .config-item {
-            display: flex;
-            flex-direction: column;
-        }
-        .config-item.full {
-            grid-column: span 2;
         }
         label {
             font-size: 11px;
@@ -101,17 +91,17 @@
 
         .btn-group {
             width: 100%;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
             display: grid;
-            grid-template-columns: 1.2fr repeat(5, 1fr); 
+            grid-template-columns: 1.5fr repeat(4, 1fr); 
             gap: 4px;
             flex-shrink: 0;
         }
         
         button {
             width: 100%;
-            height: 40px;
-            font-size: 11px;
+            height: 44px; /* スマホで押しやすいサイズ */
+            font-size: 12px;
             font-weight: bold;
             color: #ffffff;
             border: none;
@@ -121,26 +111,13 @@
             -webkit-tap-highlight-color: transparent;
         }
         button:active { opacity: 0.7; }
-        button:disabled { background-color: #ced4da !important; color: #6c757d !important; opacity: 0.5; cursor: not-allowed; }
+        button:disabled { background-color: #ced4da !important; color: #6c757d !important; opacity: 0.5; }
         
-        #auto-config { background-color: #e83e8c; } 
         #start { background-color: #007bff; }
         #stop { background-color: #dc3545; }
         #copy { background-color: #17a2b8; }
         #save { background-color: #28a745; }
         #clear { background-color: #6c757d; }
-
-        .reset-box {
-            width: 100%;
-            margin-bottom: 8px;
-            flex-shrink: 0;
-        }
-        #reset-dev {
-            background-color: #343a40;
-            height: 28px;
-            font-size: 11px;
-            border-radius: 6px;
-        }
 
         .output-wrapper {
             flex: 1;
@@ -168,34 +145,22 @@
 
 <div class="app-container">
     <div class="main-card">
-        <h2>逐語録システム（細切れ防止・スマホ最適化版）</h2>
-        <div class="status-bar" id="status-display">「開始」または「自動設定」を押してください</div>
+        <h2>逐語録システム（スマホ認識重視版）</h2>
+        <div class="status-bar" id="status-display">「開始」を押してください</div>
         
         <div class="config-box">
-            <div class="config-item full">
-                <label for="device-select">入力デバイス選択</label>
-                <select id="device-select"><option value="">既定のマイク（自動選択）</option></select>
-            </div>
-            <div class="config-item">
-                <label for="sensitivity-select">感度調整 (1-50)</label>
+            <div>
+                <label for="sensitivity-select">細切れ防止・感度調整（文字の間引き）</label>
                 <select id="sensitivity-select"></select>
-            </div>
-            <div class="config-item">
-                <label for="boost-select">ブースト設定 (参考値)</label>
-                <select id="boost-select"></select>
             </div>
         </div>
 
         <div class="btn-group">
-            <button id="auto-config">自動設定</button>
             <button id="start">開始</button>
             <button id="stop" disabled>停止</button>
             <button id="copy">コピー</button>
             <button id="save">保存</button>
             <button id="clear">クリア</button>
-        </div>
-        <div class="reset-box">
-            <button id="reset-dev">デバイスリセット</button>
         </div>
 
         <div class="output-wrapper" id="scroll-container">
@@ -207,36 +172,30 @@
 </div>
 
 <script>
-    const autoBtn = document.getElementById('auto-config');
     const startBtn = document.getElementById('start');
     const stopBtn = document.getElementById('stop');
     const copyBtn = document.getElementById('copy');
     const saveBtn = document.getElementById('save');
     const clearBtn = document.getElementById('clear');
-    const resetDevBtn = document.getElementById('reset-dev');
     const finalSpan = document.getElementById('final-span');
     const interimSpan = document.getElementById('interim-span');
     const scrollContainer = document.getElementById('scroll-container');
     const statusDisp = document.getElementById('status-display');
-    const deviceSelect = document.getElementById('device-select');
     const sensitivitySelect = document.getElementById('sensitivity-select');
-    const boostSelect = document.getElementById('boost-select');
 
     let recognition = null;
     let isActive = false;
-    let isCalibrating = false;
     let restartTimeoutId = null;
     let wakeLock = null;
     let confirmedHistory = [];
-    let noiseCount = 0;
-    let audioLocalStream = null;
 
-    // 感度とブーストの選択肢を生成
+    // 感度設定（1〜50）。初期値は20（標準）
     for(let i=1; i<=50; i++){
-        const optS = document.createElement('option'); optS.value = i; optS.innerText = i; if(i===20) optS.selected = true;
+        const optS = document.createElement('option');
+        optS.value = i;
+        optS.innerText = i === 20 ? `${i} (標準)` : i;
+        if(i===20) optS.selected = true;
         sensitivitySelect.appendChild(optS);
-        const optB = document.createElement('option'); optB.value = i; optB.innerText = i; if(i===30) optB.selected = true;
-        boostSelect.appendChild(optB);
     }
 
     function updateStatus(state, msg) {
@@ -245,74 +204,37 @@
             statusDisp.style.backgroundColor = "#d4edda"; statusDisp.style.color = "#155724";
         } else if (state === 'offline') {
             statusDisp.style.backgroundColor = "#e2e3e5"; statusDisp.style.color = "#383d41";
-        } else if (state === 'calibrating') {
-            statusDisp.style.backgroundColor = "#e83e8c"; statusDisp.style.color = "#ffffff";
         } else {
             statusDisp.style.backgroundColor = "#fff3cd"; statusDisp.style.color = "#856404";
         }
     }
 
-    async function initDevices() {
-        try {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-            const currentSelected = deviceSelect.value;
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            deviceSelect.innerHTML = '<option value="">既定のマイク（自動選択）</option>';
-            devices.forEach(device => {
-                if (device.kind === 'audioinput') {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.innerText = device.label || `マイク (${device.deviceId.slice(0,5)})`;
-                    if (device.deviceId === currentSelected && currentSelected !== "") {
-                        option.selected = true;
-                    }
-                    deviceSelect.appendChild(option);
-                }
-            });
-        } catch (e) {
-            console.warn(e);
-        }
-    }
-
+    // 画面スリープ防止（スマホ用）
     async function requestWakeLock() {
         if ('wakeLock' in navigator) {
             try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
     }
-    
     function releaseWakeLock() {
         if (wakeLock) { wakeLock.release().then(() => wakeLock = null); }
     }
 
-    function closeStream() {
-        if (audioLocalStream) {
-            try { audioLocalStream.getTracks().forEach(track => track.stop()); } catch(e){}
-            audioLocalStream = null;
-        }
-    }
-
-    function initRecognition() {
+    // 音声認識の初期化・起動
+    function startRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            updateStatus('offline', "お使いの端末・ブラウザは音声認識に非対応です");
+            updateStatus('offline', "ブラウザが音声認識に対応していません（Safari等でお試しください）");
             return;
-        }
-
-        if (recognition) {
-            try { recognition.onstart = null; recognition.onresult = null; recognition.onend = null; recognition.onerror = null; recognition.stop(); } catch(e){}
-            recognition = null;
         }
 
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
-        recognition.interimResults = true;
-        recognition.continuous = true; 
+        recognition.interimResults = true; // 途中の文字も表示
+        recognition.continuous = true;     // 連続認識
 
         recognition.onstart = () => {
-            if (!isCalibrating) {
-                updateStatus('online', "音声認識中：お話しください");
-                requestWakeLock();
-            }
+            updateStatus('online', "音声認識中... お話しください");
+            requestWakeLock();
         };
 
         recognition.onresult = (e) => {
@@ -320,23 +242,19 @@
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
                 
-                if (isCalibrating) {
-                    if (e.results[i].isFinal) { noiseCount += transcript.trim().length; }
-                    continue;
-                }
-
-                // 細切れ対策のしきい値計算
+                // 【細切れ対策】感度設定による文字間引き
                 const minLengthFilter = Math.max(0, Math.floor((30 - parseInt(sensitivitySelect.value)) / 10));
                 
                 if (e.results[i].isFinal) {
                     let cleanedText = transcript.trim();
                     if (cleanedText.length < minLengthFilter) continue;
 
+                    // フィラー（えーっと等）の削除
                     const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん|えっと)/g;
                     cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの|えっと)[、\s]?/g, " ").trim();
                     if (cleanedText === "") continue;
 
-                    // 重複防御
+                    // 直前の文章との重複防御
                     let isDuplicate = false;
                     const checkLength = Math.min(cleanedText.length, 6);
                     const incomingChunk = cleanedText.substring(0, checkLength);
@@ -351,6 +269,7 @@
                     confirmedHistory.push(cleanedText);
                     if (confirmedHistory.length > 10) confirmedHistory.shift();
 
+                    // 改行・句読点の整形
                     const currentFinal = finalSpan.innerText.trim();
                     let separator = "";
                     if (currentFinal !== "") {
@@ -365,122 +284,70 @@
                     interimText += transcript;
                 }
             }
-            if (!isCalibrating) {
-                interimSpan.innerText = interimText;
-                // スマホ向けにスクロール追従を確実に
-                setTimeout(() => {
-                    scrollContainer.scrollTop = scrollContainer.scrollHeight;
-                }, 50);
-            }
+            
+            interimSpan.innerText = interimText;
+            
+            // スマホ用：文字が増えたら確実に最下部へスクロール
+            setTimeout(() => {
+                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }, 30);
         };
 
         recognition.onend = () => {
-            if (isActive && !isCalibrating) {
+            // 意図しない切断時、有効フラグが立っていれば即時再起動（スマホのバックグラウンド対策）
+            if (isActive) {
                 clearTimeout(restartTimeoutId);
                 restartTimeoutId = setTimeout(() => {
                     if (isActive && recognition) {
                         try { recognition.start(); } catch(err){}
                     }
-                }, 300);
+                }, 200);
             }
         };
 
         recognition.onerror = (ev) => {
-            console.error("SpeechRecognition Error:", ev.error);
+            console.error("認識エラー:", ev.error);
             if (ev.error === 'not-allowed') {
-                updateStatus('offline', "マイク権限を許可してください");
-                resetUI();
+                updateStatus('offline', "マイク権限が拒否されました");
+                stopBtn.click();
             }
         };
-    }
 
-    function resetUI() {
-        isActive = false; isCalibrating = false;
-        startBtn.disabled = false; autoBtn.disabled = false; stopBtn.disabled = true;
-        deviceSelect.disabled = false;
-        closeStream();
-        releaseWakeLock();
-    }
-
-    // 自動設定（キャリブレーション）
-    autoBtn.onclick = async () => {
-        // スマホ対策：ユーザー操作直後にストリームを取得
-        isActive = true; isCalibrating = true;
-        autoBtn.disabled = true; startBtn.disabled = true; stopBtn.disabled = true; deviceSelect.disabled = true;
-        noiseCount = 0;
-
+        // スマホのタップイベントに直結させて起動（最重要）
         try {
-            const constraints = { audio: true };
-            if (deviceSelect.value) { constraints.audio = { deviceId: { exact: deviceSelect.value } }; }
-            audioLocalStream = await navigator.mediaDevices.getUserMedia(constraints);
-            await initDevices();
-        } catch (err) {
-            updateStatus('offline', "マイクの起動に失敗しました。権限を確認してください。");
-            resetUI();
-            return;
+            recognition.start();
+        } catch(e) {
+            console.error("起動失敗:", e);
         }
-
-        initRecognition();
-        try { recognition.start(); } catch(e){ console.error(e); }
-
-        let timeLeft = 3;
-        updateStatus('calibrating', `環境音測定中... 残り ${timeLeft} 秒 (黙ってください)`);
-        
-        const timer = setInterval(() => {
-            timeLeft--;
-            if (timeLeft > 0) {
-                updateStatus('calibrating', `環境音測定中... 残り ${timeLeft} 秒 (黙ってください)`);
-            } else {
-                clearInterval(timer);
-                isCalibrating = false; isActive = false;
-                if (recognition) { try { recognition.stop(); } catch(e){} }
-                closeStream();
-
-                let calculatedSensitivity = 20;
-                let calculatedBoost = 30;
-
-                if (noiseCount > 10) { calculatedSensitivity = 8; calculatedBoost = 45; }
-                else if (noiseCount > 4) { calculatedSensitivity = 15; calculatedBoost = 35; }
-                else if (noiseCount > 0) { calculatedSensitivity = 22; calculatedBoost = 25; }
-                else { calculatedSensitivity = 30; calculatedBoost = 15; }
-
-                sensitivitySelect.value = calculatedSensitivity;
-                boostSelect.value = calculatedBoost;
-
-                updateStatus('offline', `設定完了 (感度:${calculatedSensitivity}/ブースト:${calculatedBoost}) 「開始」を押してください`);
-                autoBtn.disabled = false; startBtn.disabled = false; deviceSelect.disabled = false;
-            }
-        }, 1000);
-    };
+    }
 
     // 開始ボタン
-    startBtn.onclick = async () => {
-        isActive = true; startBtn.disabled = true; autoBtn.disabled = true; stopBtn.disabled = false; deviceSelect.disabled = true;
-        updateStatus('', "マイク接続中...");
-
-        try {
-            const constraints = { audio: true };
-            if (deviceSelect.value) { constraints.audio = { deviceId: { exact: deviceSelect.value } }; }
-            audioLocalStream = await navigator.mediaDevices.getUserMedia(constraints);
-            await initDevices();
-        } catch (err) {
-            updateStatus('offline', "マイクの起動に失敗しました");
-            resetUI();
-            return;
+    startBtn.onclick = () => {
+        isActive = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        updateStatus('', "マイク起動中...");
+        
+        // 過去の動作インスタンスを掃除
+        if (recognition) {
+            try { recognition.onstart = null; recognition.onresult = null; recognition.onend = null; recognition.onerror = null; recognition.stop(); } catch(e){}
         }
-
-        initRecognition();
-        try { 
-            recognition.start(); 
-        } catch (e) {
-            setTimeout(() => { if(isActive) recognition.start(); }, 300);
-        }
+        
+        // スマホのタップ契機で直接音声認識を回す
+        startRecognition();
     };
 
     // 停止ボタン
     stopBtn.onclick = () => {
-        resetUI();
-        if (recognition) { try { recognition.stop(); } catch(e){} }
+        isActive = false;
+        clearTimeout(restartTimeoutId);
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        
+        if (recognition) {
+            try { recognition.stop(); } catch(e){}
+        }
+        releaseWakeLock();
         updateStatus('offline', "停止しました");
     };
 
@@ -492,7 +359,7 @@
             await navigator.clipboard.writeText(text);
             const originalText = copyBtn.innerText; copyBtn.innerText = "完了";
             setTimeout(() => copyBtn.innerText = originalText, 1200);
-        } catch (err) { alert("長押ししてコピーしてください：\n\n" + text); }
+        } catch (err) { alert("長押しして選択コピーしてください：\n\n" + text); }
     };
 
     // 保存
@@ -517,28 +384,6 @@
             finalSpan.innerText = ""; interimSpan.innerText = ""; confirmedHistory = [];
         }
     };
-
-    // デバイスリセット
-    resetDevBtn.onclick = async () => {
-        const activeState = isActive;
-        if (activeState) resetUI();
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => track.stop());
-            await initDevices();
-            updateStatus('offline', "デバイスを再スキャンしました");
-        } catch(e) { alert("マイクの使用権限を許可してください"); }
-        if (activeState) { setTimeout(() => { startBtn.click(); }, 400); }
-    };
-
-    window.addEventListener('DOMContentLoaded', async () => {
-        // 最初の権限確認ポップアップ用
-        try {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                await initDevices();
-            }
-        } catch(e) { console.log("初期デバイス読み込みスキップ"); }
-    });
 </script>
 
 </body>
