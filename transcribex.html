@@ -53,7 +53,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        .btn-group, .select-group, .gauge-group {
+        .btn-group, .select-group, .gauge-group, .checkbox-group {
             display: flex;
             align-items: center;
             gap: 6px;
@@ -213,6 +213,11 @@
             </div>
         </div>
 
+        <div class="checkbox-group">
+            <input type="checkbox" id="fillerCheck" checked>
+            <label for="fillerCheck" style="font-size: 12px; cursor: pointer; user-select: none;">フィラー削除</label>
+        </div>
+
         <div id="statusBadge">切断</div>
     </div>
 
@@ -250,6 +255,9 @@
     const finalArea = document.getElementById('finalArea');
     const interimArea = document.getElementById('interimArea');
     const infoArea = document.getElementById('infoArea');
+    
+    // ★追加: フィラー削除要素の取得
+    const fillerCheck = document.getElementById('fillerCheck');
 
     let recognition = null;
     let isActive = false; 
@@ -260,9 +268,14 @@
     let animationFrameId = null;
     let currentStream = null;
     let reconnectTimeoutId = null;
-
-    // ★追加: Wake Lock（スリープ防止）用の変数
     let wakeLock = null;
+
+    // ★追加: 削除対象とするフィラー言葉のリスト（必要に応じて調整してください）
+    const fillerWords = [
+        "えーっと", "えーと", "えー", "えっと", 
+        "あのー", "あの", "あー", "まー", 
+        "そのー", "その", "えいうか", "なんか"
+    ];
 
     // 感度選択のプルダウン生成
     for (let i = 1; i <= 100; i++) {
@@ -291,14 +304,12 @@
         }
     }
 
-    // ★追加: スリープ禁止をリクエストする関数
     async function requestWakeLock() {
         if ('wakeLock' in navigator) {
             try {
                 wakeLock = await navigator.wakeLock.request('screen');
                 log("スリープ防止機能（Wake Lock）が有効になりました。");
                 
-                // タブの切り替えなどでロックが外れた場合の再取得処理
                 wakeLock.addEventListener('release', () => {
                     if (isActive) {
                         log("Wake Lockが解除されました。再取得を試みます...");
@@ -312,7 +323,6 @@
         }
     }
 
-    // ★追加: スリープ禁止を解除する関数
     async function releaseWakeLock() {
         if (wakeLock !== null) {
             try {
@@ -459,7 +469,7 @@
             } else {
                 updateStatus('切断');
                 log("音声認識を停止しました。");
-                releaseWakeLock(); // ★追加：完全に終了したらスリープ禁止を解除
+                releaseWakeLock(); 
             }
         };
 
@@ -473,6 +483,18 @@
 
                 if (result.isFinal) {
                     let cleanedText = text.trim();
+                    
+                    // ★追加: フィラー削除がオンの場合の置換処理
+                    if (fillerCheck.checked && cleanedText) {
+                        fillerWords.forEach(word => {
+                            // 文頭・文中・文末のフィラーを正規表現で削除
+                            const regex = new RegExp(word, 'g');
+                            cleanedText = cleanedText.replace(regex, '');
+                        });
+                        // 削除の結果、空行になった場合は追加しない
+                        cleanedText = cleanedText.trim();
+                    }
+
                     if (cleanedText) {
                         finalTranscriptChunks += cleanedText + "\n";
                     }
@@ -503,7 +525,7 @@
         btnStop.disabled = false;
         deviceSelect.disabled = true;
 
-        await requestWakeLock(); // ★追加：開始時にスリープ禁止を要求
+        await requestWakeLock(); 
         await startAudioAnalysis(deviceSelect.value);
         initSpeechRecognition();
         
@@ -515,7 +537,7 @@
             btnStart.disabled = false;
             btnStop.disabled = true;
             deviceSelect.disabled = false;
-            await releaseWakeLock(); // ★追加：失敗時は解除
+            await releaseWakeLock(); 
         }
     });
 
@@ -541,7 +563,7 @@
         interimArea.textContent = '';
         updateStatus('切断');
         
-        await releaseWakeLock(); // ★追加：手動停止時にスリープ禁止を解除
+        await releaseWakeLock(); 
     });
 
     btnCopy.addEventListener('click', () => {
@@ -605,7 +627,6 @@
             log("音声入力デバイスが切り替えられました。");
         });
         
-        // ★追加: 別のタブに移動して戻ってきたときに、もし認識中ならスリープ防止を再適用する
         document.addEventListener('visibilitychange', async () => {
             if (wakeLock !== null && document.visibilityState === 'visible' && isActive) {
                 await requestWakeLock();
