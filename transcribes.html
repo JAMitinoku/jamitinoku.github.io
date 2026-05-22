@@ -211,6 +211,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
+    let watchDogTimeoutId = null; // フリーズ監視用タイマー
     let wakeLock = null;
     let confirmedHistory = [];
 
@@ -265,7 +266,45 @@
         if (wakeLock) { wakeLock.release().then(() => wakeLock = null); }
     }
 
-    // 音声認識の起動（スマホ競合原因のWeb Audioを完全排除）
+    // 生存監視タイマー（15秒間、何の応答もなければフリーズとみなして強制再起動）
+    function feedWatchDog() {
+        clearTimeout(watchDogTimeoutId);
+        if (!isActive) return;
+        
+        watchDogTimeoutId = setTimeout(() => {
+            if (isActive && recognition) {
+                console.warn("フリーズを検知したため、音声認識を強制再起動します。");
+                try {
+                    recognition.abort(); // 強制終了させてonendを発生させる
+                } catch(e) {
+                    resetAndRestart();
+                }
+            }
+        }, 15000); 
+    }
+
+    // 安全に再起動をかけるための破棄＆再構築関数
+    function resetAndRestart() {
+        clearTimeout(restartTimeoutId);
+        if (!isActive) return;
+
+        restartTimeoutId = setTimeout(() => {
+            if (isActive) {
+                if (recognition) {
+                    try {
+                        recognition.onstart = null;
+                        recognition.onresult = null;
+                        recognition.onend = null;
+                        recognition.onerror = null;
+                        recognition.abort();
+                    } catch(e){}
+                }
+                startSystem();
+            }
+        }, 300);
+    }
+
+    // 音声認識の起動
     async function startSystem() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
@@ -273,18 +312,18 @@
             return;
         }
 
-        // 選択されたデバイスで一度マイクを起動させて権限を確定させる
-        try {
-            const constraints = { audio: true };
-            if (deviceSelect.value) {
-                constraints.audio = { deviceId: { exact: deviceSelect.value } };
+        if (deviceSelect.options.length <= 1) {
+            try {
+                const constraints = { audio: true };
+                if (deviceSelect.value) {
+                    constraints.audio = { deviceId: { exact: deviceSelect.value } };
+                }
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                await initDevices();
+                stream.getTracks().forEach(t => t.stop());
+            } catch (err) {
+                console.warn("マイクアクセス権のエラー:", err);
             }
-            const stream = await navigator.mediaDevices.getUserMedia(constraints);
-            // デバイス名を出すために再取得してすぐストリームは閉じる（音声認識エンジンにマイクを譲るため）
-            await initDevices();
-            stream.getTracks().forEach(t => t.stop());
-        } catch (err) {
-            console.warn("マイクアクセス権のエラー:", err);
         }
 
         recognition = new SpeechRecognition();
@@ -295,9 +334,12 @@
         recognition.onstart = () => {
             updateStatus('online', "音声認識中... お話しください");
             requestWakeLock();
+            feedWatchDog();
         };
 
         recognition.onresult = (e) => {
+            feedWatchDog(); // 音声入力（中間結果含む）がある度にタイマーリセット
+            
             let interimText = '';
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript;
@@ -346,12 +388,7 @@
 
         recognition.onend = () => {
             if (isActive) {
-                clearTimeout(restartTimeoutId);
-                restartTimeoutId = setTimeout(() => {
-                    if (isActive && recognition) {
-                        try { recognition.start(); } catch(err){}
-                    }
-                }, 200);
+                resetAndRestart();
             }
         };
 
@@ -359,14 +396,18 @@
             console.error("認識エラー:", ev.error);
             if (ev.error === 'not-allowed') {
                 updateStatus('offline', "マイク権限が拒否されました");
+                isActive = false;
                 stopBtn.click();
+            } else {
+                feedWatchDog(); 
             }
         };
 
         try {
             recognition.start();
         } catch(e) {
-            console.error(e);
+            console.error("開始失敗、再試行します:", e);
+            resetAndRestart();
         }
     }
 
@@ -378,10 +419,6 @@
         deviceSelect.disabled = true;
         updateStatus('', "システム起動中...");
         
-        if (recognition) {
-            try { recognition.onstart = null; recognition.onresult = null; recognition.onend = null; recognition.onerror = null; recognition.stop(); } catch(e){}
-        }
-        
         startSystem();
     };
 
@@ -389,11 +426,20 @@
     stopBtn.onclick = () => {
         isActive = false;
         clearTimeout(restartTimeoutId);
+        clearTimeout(watchDogTimeoutId);
         startBtn.disabled = false;
         stopBtn.disabled = true;
         deviceSelect.disabled = false;
         
-        if (recognition) { try { recognition.stop(); } catch(e){} }
+        if (recognition) { 
+            try { 
+                recognition.onstart = null;
+                recognition.onresult = null;
+                recognition.onend = null;
+                recognition.onerror = null;
+                recognition.stop(); 
+            } catch(e){} 
+        }
         releaseWakeLock();
         updateStatus('offline', "停止しました");
     };
