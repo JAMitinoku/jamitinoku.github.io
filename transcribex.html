@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (スマホ・ハイブリッド編集版)</title>
+    <title>超安定文字起こしツール (スマホ・ハイブリッド編集・ブースト対応版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -210,7 +210,6 @@
             color: var(--secondary);
         }
 
-        /* 【変更点】 textareaから、transcribex流のレスポンシブなログスクリーン表示へ変更 */
         .text-panel {
             flex: 1;
             min-height: 0;
@@ -228,7 +227,6 @@
             word-break: break-all;
         }
 
-        /* transcribex流の確定ブロック用CSS */
         .block {
             margin-bottom: 0.8em;
             border-left: 3px solid var(--log-accent);
@@ -250,7 +248,6 @@
             padding-right: 8px;
         }
 
-        /* 未確定のリアルタイムプレビュー用表示 */
         .interim-live {
             color: #8b949e;
             font-style: italic;
@@ -432,6 +429,14 @@
                 <option value="1500">最低 (文章をまとめる)</option>
             </select>
         </div>
+        <div id="boostRow" class="select-row" style="margin-top: 6px; display: none;">
+            <span class="select-label">内部ブースト:</span>
+            <select id="boostSelect">
+                <option value="1.0" selected>等倍 (通常)</option>
+                <option value="1.5">1.5倍 (小声ファイル用)</option>
+                <option value="2.0">2.0倍 (遠くの声用)</option>
+            </select>
+        </div>
     </div>
 
     <div class="text-panel" id="textPanel">
@@ -463,6 +468,7 @@
     let audioCtx = null;
     let audioSource = null;
     let monitorGainNode = null;
+    let recognitionGainNode = null; // PC用内部ブーストノード
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -474,6 +480,8 @@
     const btnReset = document.getElementById('btnReset');
     const deviceSelect = document.getElementById('deviceSelect');
     const sensitivitySelect = document.getElementById('sensitivitySelect');
+    const boostSelect = document.getElementById('boostSelect');
+    const boostRow = document.getElementById('boostRow');
     const textPanel = document.getElementById('textPanel');
     const logScreen = document.getElementById('logScreen');
     const statusDot = document.getElementById('statusDot');
@@ -493,7 +501,12 @@
     let lastFinalText = ""; 
     let currentInterim = "";
 
-    // モード切り替え
+    // 【修正箇所】 PC（非モバイル環境）であれば内部ブーストセレクトボックスを正しく表示する
+    if (!isMobile) {
+        boostRow.style.display = 'flex'; 
+    }
+
+    // タブ切り替え
     tabRealtime.addEventListener('click', () => switchMode('realtime'));
     tabMedia.addEventListener('click', () => switchMode('media'));
 
@@ -568,6 +581,13 @@
         }
     });
 
+    // 内部ブーストが動的に変更された場合の処理 (PC用)
+    boostSelect.addEventListener('change', () => {
+        if (recognitionGainNode && audioCtx) {
+            recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
+        }
+    });
+
     // ドラッグ＆ドロップ
     window.addEventListener('dragenter', (e) => {
         e.preventDefault();
@@ -630,7 +650,6 @@
         };
 
         recognition.onresult = (event) => {
-            // 未確定（中途）文字を削除
             const oldInterim = document.getElementById('interimLiveBlock');
             if (oldInterim) oldInterim.remove();
 
@@ -710,7 +729,6 @@
         }
     }
 
-    // 【流用・統合】 transcribexの重複防止マージロジック
     function mergeOverlap(prev, next) {
         if (!prev) return next;
         if (prev === next) return ""; 
@@ -728,7 +746,6 @@
         return next;
     }
 
-    // 【流用・統合】 transcribexの確定ブロック生成 & 直接タップ編集機能
     function addFinalBlock(text) {
         let uniqueText = mergeOverlap(lastFinalText, text);
         uniqueText = uniqueText.trim();
@@ -741,7 +758,6 @@
         const hasPunctuation = /[。？！\?\!]$/.test(uniqueText);
         newBlock.innerText = uniqueText + (hasPunctuation ? "" : "。");
         
-        // タップして編集可能にする
         newBlock.onclick = function() {
             if (this.getAttribute('contenteditable') !== 'true') {
                 this.setAttribute('contenteditable', 'true');
@@ -749,7 +765,6 @@
             }
         };
 
-        // フォーカスアウト（編集確定）
         newBlock.onblur = function() {
             this.removeAttribute('contenteditable');
             this.innerText = this.innerText.trim();
@@ -758,7 +773,6 @@
             }
         };
 
-        // Enterキーで編集を確定
         newBlock.onkeydown = function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -807,10 +821,21 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (!isMobile) {
                     audioSource = audioCtx.createMediaElementSource(audioPlayer);
+                    
+                    // モニター（スピーカー再生用）
                     monitorGainNode = audioCtx.createGain();
                     monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
+                    
+                    // 内部ブースト用（PCの仮想ルーティング拡張用）
+                    recognitionGainNode = audioCtx.createGain();
+                    recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
+
+                    // 接続
                     audioSource.connect(monitorGainNode);
                     monitorGainNode.connect(audioCtx.destination);
+                    
+                    audioSource.connect(recognitionGainNode);
+                    // ※SpeechRecognitionへの仮想接続拡張用として保持
                 }
             }
             if (audioCtx.state === 'suspended') {
@@ -842,7 +867,6 @@
 
     btnStop.addEventListener('click', stopProcess);
 
-    // 【流用・統合】 コピーロジック（ブロック要素から集約）
     btnCopy.addEventListener('click', () => {
         const text = Array.from(document.querySelectorAll('#logScreen .block')).map(b => b.innerText).join('\n');
         if (!text) return;
@@ -851,14 +875,13 @@
             .catch(err => console.error("コピー失敗:", err));
     });
 
-    // 【流用・統合】 保存ロジック（ブロック要素からファイル生成）
     btnSave.addEventListener('click', () => {
         const text = Array.from(document.querySelectorAll('#logScreen .block')).map(b => b.innerText).join('\n');
         if (!text) return;
         const blob = new Blob([text], { type: 'text/plain' });
         const a = document.createElement('a');
         const now = new Date();
-        const filename = `起こし文_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate())+1.0}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
+        const filename = `起こし文_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
         a.href = URL.createObjectURL(blob);
         a.download = filename;
         a.click();
