@@ -15,11 +15,11 @@ const cmsData = {
     },
     {
       id: 2,
-      date: "2026年05月19日",
+      date: "",
       category: "",
-      title: "簡易文字起こしツール（PC）",
-      content: "Googleの文字認識サーバ利用の文字起こしツール。Chrome推奨",
-      url: "https://jamitinoku.github.io/transcribex.html" // ← リンク先を指定
+      title: "",
+      content: "",
+      url: "" // ← リンク先を指定
     },
     {
       id: 1,
