@@ -551,7 +551,7 @@
         }
     });
 
-    // ドラッグ＆ドロップ
+    // ドラッグ＆ドロップ（インプット状態同期対応版）
     window.addEventListener('dragenter', (e) => {
         e.preventDefault();
         if (!isRunning) dropOverlay.classList.add('active');
@@ -566,7 +566,15 @@
         e.preventDefault();
         dropOverlay.classList.remove('active');
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            loadMediaFile(e.dataTransfer.files[0]);
+            const file = e.dataTransfer.files[0];
+            
+            // ファイルインプットにドロップされたファイルを同期させる
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            mediaFile.files = dataTransfer.files;
+
+            // ファイル読み込み処理を実行
+            loadMediaFile(file);
         }
     });
 
