@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (スマホ・ハイブリッド編集・ブースト対応版)</title>
+    <title>超安定文字起こしツール (スマホ・ハイブリッド編集・バグ修正版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -468,7 +468,7 @@
     let audioCtx = null;
     let audioSource = null;
     let monitorGainNode = null;
-    let recognitionGainNode = null; // PC用内部ブーストノード
+    let recognitionGainNode = null; 
 
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -501,12 +501,10 @@
     let lastFinalText = ""; 
     let currentInterim = "";
 
-    // 【修正箇所】 PC（非モバイル環境）であれば内部ブーストセレクトボックスを正しく表示する
     if (!isMobile) {
         boostRow.style.display = 'flex'; 
     }
 
-    // タブ切り替え
     tabRealtime.addEventListener('click', () => switchMode('realtime'));
     tabMedia.addEventListener('click', () => switchMode('media'));
 
@@ -581,14 +579,12 @@
         }
     });
 
-    // 内部ブーストが動的に変更された場合の処理 (PC用)
     boostSelect.addEventListener('change', () => {
         if (recognitionGainNode && audioCtx) {
             recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
         }
     });
 
-    // ドラッグ＆ドロップ
     window.addEventListener('dragenter', (e) => {
         e.preventDefault();
         if (!isRunning) dropOverlay.classList.add('active');
@@ -817,27 +813,31 @@
         currentInterim = "";
 
         if (currentMode === 'media') {
+            // 【修正箇所】 AudioContext と 各種GainNode / SourceNode の重複生成を防ぐ
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (!isMobile) {
-                    audioSource = audioCtx.createMediaElementSource(audioPlayer);
-                    
-                    // モニター（スピーカー再生用）
-                    monitorGainNode = audioCtx.createGain();
-                    monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
-                    
-                    // 内部ブースト用（PCの仮想ルーティング拡張用）
-                    recognitionGainNode = audioCtx.createGain();
-                    recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
-
-                    // 接続
-                    audioSource.connect(monitorGainNode);
-                    monitorGainNode.connect(audioCtx.destination);
-                    
-                    audioSource.connect(recognitionGainNode);
-                    // ※SpeechRecognitionへの仮想接続拡張用として保持
-                }
             }
+            
+            if (!isMobile && !audioSource) {
+                // audioSource が未生成のときだけ一度だけ生成・接続する (超重要)
+                audioSource = audioCtx.createMediaElementSource(audioPlayer);
+                
+                monitorGainNode = audioCtx.createGain();
+                monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
+                
+                recognitionGainNode = audioCtx.createGain();
+                recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
+
+                audioSource.connect(monitorGainNode);
+                monitorGainNode.connect(audioCtx.destination);
+                
+                audioSource.connect(recognitionGainNode);
+            } else if (!isMobile && monitorGainNode) {
+                // すでに生成済みの場合は、現在のスライダー値にノード値を合わせる
+                monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
+                recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
+            }
+
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
