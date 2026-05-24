@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (Chrome完全対応・音量分離版)</title>
+    <title>超安定文字起こしツール (ファイル表示・音量分離版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -229,36 +229,6 @@
             -webkit-appearance: none;
         }
 
-        #dropOverlay {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 123, 255, 0.15);
-            border: 4px dashed var(--primary);
-            border-radius: 8px;
-            z-index: 9999;
-            pointer-events: none;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #dropOverlay.active {
-            display: flex;
-        }
-
-        .drop-message {
-            background: var(--card-bg);
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--primary);
-        }
-
         .controls-panel {
             display: flex;
             flex-direction: column;
@@ -305,6 +275,36 @@
         .btn-save { background-color: #17a2b8; }
         .btn-clear { background-color: var(--secondary); }
         .btn-reset { background-color: #6f42c1; font-size: 0.9rem; }
+
+        #dropOverlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 123, 255, 0.15);
+            border: 4px dashed var(--primary);
+            border-radius: 8px;
+            z-index: 9999;
+            pointer-events: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #dropOverlay.active {
+            display: flex;
+        }
+
+        .drop-message {
+            background: var(--card-bg);
+            padding: 20px 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
 
         @media (min-width: 600px) {
             .container {
@@ -523,7 +523,6 @@
         else clearSelectedFile();
     });
 
-    // 【修正点】モニター再生音量を変更しても、文字起こし側の音声レベルには一切同期・連動しない独立構造
     monitorVolume.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         volValue.innerText = `${Math.round(val * 100)}%`;
@@ -543,8 +542,7 @@
         e.preventDefault();
         if (e.clientX === 0 && e.clientY === 0) dropOverlay.classList.remove('active');
     });
-
-    // 【修正点】D&D時にファイル選択コンポーネント（inputエリア）にもファイルを完全連動・同期
+    
     window.addEventListener('drop', (e) => {
         e.preventDefault();
         dropOverlay.classList.remove('active');
@@ -588,8 +586,6 @@
 
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
-        
-        // 【重要・Chrome対応】Chromeの仕様に合わせ確実に音をストリームで拾うためcontinuousをtrue化
         recognition.continuous = true; 
         recognition.interimResults = true; 
         recognition.maxAlternatives = 1;
@@ -622,10 +618,12 @@
                     currentInterim = "";
                 } else {
                     let currentChunk = text.slice(lastProcessedLength);
+                    
                     if (currentChunk.length >= 40) {
                         activeParagraph += currentChunk;
                         lastProcessedLength = text.length;
                     }
+                    
                     interimText = text.slice(lastProcessedLength);
                     currentInterim = interimText;
                 }
@@ -714,7 +712,8 @@
         btnStart.disabled = true;
         btnStop.disabled = false;
         
-        finalizedLines = [];
+        // 💡 【修正点】過去のデータを全クリア（finalizedLines = []）する処理を削除し、
+        // 続きからテキストを追加できるように変更しました。
         activeParagraph = "";
         currentInterim = "";
         lastProcessedLength = 0;
@@ -766,7 +765,7 @@
         const blob = new Blob([text], { type: 'text/plain' });
         const a = document.createElement('a');
         const now = new Date();
-        const filename = `起こし文_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours())+1}_${String(now.getMinutes()).padStart(2,'0')}.txt`;
+        const filename = `起こし文_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
         a.href = URL.createObjectURL(blob);
         a.download = filename;
         a.click();
