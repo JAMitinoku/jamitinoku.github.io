@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (スマホ・ハイブリッド編集・バグ修正版)</title>
+    <title>超安定文字起こしツール (スマホ・ハイブリッド編集・最適化版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -637,6 +637,9 @@
 
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
+        
+        // スマホの文字落ち・暴走を防ぐため、 continuous は false のまま
+        // 代わりに再起動ロジックと重複制御を最適化
         recognition.continuous = false; 
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
@@ -679,6 +682,7 @@
 
         recognition.onerror = (event) => {
             console.warn("認識エラー:", event.error);
+            // スマホのバックグラウンド移行時のエラーを許容し、停止しないようにする
             if (isRunning && (event.error === 'network' || event.error === 'no-speech' || event.error === 'aborted')) {
                 updateStatus('connected', '再接続を試みています...');
             }
@@ -688,6 +692,7 @@
             const oldInterim = document.getElementById('interimLiveBlock');
             if (oldInterim) oldInterim.remove();
 
+            // 途切れの瞬間に残った未確定テキストを救出
             if (currentInterim) {
                 let text = currentInterim.replace(/[、。]+$/, "").trim();
                 if (text) {
@@ -702,7 +707,8 @@
                     return;
                 }
 
-                const delay = Math.max(400, parseInt(sensitivitySelect.value, 10));
+                // スマホのCPU負荷軽減と無音区間の取りこぼし防止のため、再起動ディレイを最適化
+                const delay = Math.max(300, parseInt(sensitivitySelect.value, 10));
                 restartTimer = setTimeout(() => {
                     if (isRunning) {
                         try { recognition.start(); } catch(e) { startRecognition(); }
@@ -725,16 +731,22 @@
         }
     }
 
+    // スマホの「誤判定消去」を防ぐため、重複排除条件を安全側に緩和
     function mergeOverlap(prev, next) {
         if (!prev) return next;
         if (prev === next) return ""; 
-        if (prev.length > 4 && next.length > 4) {
+        
+        // 短い単語の連続（例:「はい、はい」「テスト、テスト」）が消える弊害を防ぐため、
+        // 5文字以上の長い重複かつ完全一致に近い場合のみカットする
+        if (prev.length > 6 && next.length > 6) {
             if (prev.includes(next) || next.includes(prev)) {
                 if (prev.endsWith(next)) return "";
             }
         }
+        
         let maxLength = Math.min(prev.length, next.length);
-        for (let len = maxLength; len > 0; len--) {
+        // 末尾と先頭の数文字の部分的な被りをマージ（感度調整）
+        for (let len = Math.min(maxLength, 4); len > 0; len--) {
             if (prev.endsWith(next.substring(0, len))) {
                 return next.substring(len); 
             }
@@ -813,13 +825,11 @@
         currentInterim = "";
 
         if (currentMode === 'media') {
-            // 【修正箇所】 AudioContext と 各種GainNode / SourceNode の重複生成を防ぐ
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             }
             
             if (!isMobile && !audioSource) {
-                // audioSource が未生成のときだけ一度だけ生成・接続する (超重要)
                 audioSource = audioCtx.createMediaElementSource(audioPlayer);
                 
                 monitorGainNode = audioCtx.createGain();
@@ -833,7 +843,6 @@
                 
                 audioSource.connect(recognitionGainNode);
             } else if (!isMobile && monitorGainNode) {
-                // すでに生成済みの場合は、現在のスライダー値にノード値を合わせる
                 monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
                 recognitionGainNode.gain.setValueAtTime(parseFloat(boostSelect.value), audioCtx.currentTime);
             }
@@ -912,9 +921,16 @@
         updateStatus('connected', '待機中');
     });
 
+    // iOS/Android向け: タブのバックグラウンド切り替えや画面ロック復帰時の挙動を安全に制御
     document.addEventListener('visibilitychange', async () => {
         if (isRunning && document.visibilityState === 'visible') {
-            if (recognition) { try { recognition.start(); } catch(e) {} }
+            // 強制停止状態から安全に再スタートさせる（二重起動を防ぐ）
+            if (restartTimer) clearTimeout(restartTimer);
+            restartTimer = setTimeout(() => {
+                if (isRunning) {
+                    try { recognition.start(); } catch(e) {}
+                }
+            }, 400);
             await requestWakeLock();
         }
     });
