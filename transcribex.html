@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (スマホ・ハイブリッド編集・最適化版)</title>
+    <title>超速・文字起こしツール (スマホ・最速レスポンス版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -423,10 +423,10 @@
         <div class="select-row" style="margin-top: 6px;">
             <span class="select-label">応答感度:</span>
             <select id="sensitivitySelect">
-                <option value="400">最高 (即時再起動)</option>
-                <option value="600" selected>標準 (スマホ最適)</option>
-                <option value="1000">低め (沈黙を許容)</option>
-                <option value="1500">最低 (文章をまとめる)</option>
+                <option value="100" selected>最高 (超ハイスピード再起動)</option>
+                <option value="300">高速 (標準スマホ快適)</option>
+                <option value="600">中立 (バランス重視)</option>
+                <option value="1200">低め (沈黙を許容)</option>
             </select>
         </div>
         <div id="boostRow" class="select-row" style="margin-top: 6px; display: none;">
@@ -638,8 +638,6 @@
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         
-        // スマホの文字落ち・暴走を防ぐため、 continuous は false のまま
-        // 代わりに再起動ロジックと重複制御を最適化
         recognition.continuous = false; 
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
@@ -682,9 +680,8 @@
 
         recognition.onerror = (event) => {
             console.warn("認識エラー:", event.error);
-            // スマホのバックグラウンド移行時のエラーを許容し、停止しないようにする
             if (isRunning && (event.error === 'network' || event.error === 'no-speech' || event.error === 'aborted')) {
-                updateStatus('connected', '再接続を試みています...');
+                updateStatus('connected', '最速再起動を試みています...');
             }
         };
 
@@ -692,7 +689,6 @@
             const oldInterim = document.getElementById('interimLiveBlock');
             if (oldInterim) oldInterim.remove();
 
-            // 途切れの瞬間に残った未確定テキストを救出
             if (currentInterim) {
                 let text = currentInterim.replace(/[、。]+$/, "").trim();
                 if (text) {
@@ -707,8 +703,8 @@
                     return;
                 }
 
-                // スマホのCPU負荷軽減と無音区間の取りこぼし防止のため、再起動ディレイを最適化
-                const delay = Math.max(300, parseInt(sensitivitySelect.value, 10));
+                // 確定から次の起動までのウェイト時間を極限まで圧縮
+                const delay = parseInt(sensitivitySelect.value, 10);
                 restartTimer = setTimeout(() => {
                     if (isRunning) {
                         try { recognition.start(); } catch(e) { startRecognition(); }
@@ -726,18 +722,15 @@
         } catch(e) {
             console.error("開始失敗:", e);
             if (isRunning) {
-                restartTimer = setTimeout(() => startRecognition(), 1000);
+                restartTimer = setTimeout(() => startRecognition(), 200);
             }
         }
     }
 
-    // スマホの「誤判定消去」を防ぐため、重複排除条件を安全側に緩和
     function mergeOverlap(prev, next) {
         if (!prev) return next;
         if (prev === next) return ""; 
         
-        // 短い単語の連続（例:「はい、はい」「テスト、テスト」）が消える弊害を防ぐため、
-        // 5文字以上の長い重複かつ完全一致に近い場合のみカットする
         if (prev.length > 6 && next.length > 6) {
             if (prev.includes(next) || next.includes(prev)) {
                 if (prev.endsWith(next)) return "";
@@ -745,7 +738,6 @@
         }
         
         let maxLength = Math.min(prev.length, next.length);
-        // 末尾と先頭の数文字の部分的な被りをマージ（感度調整）
         for (let len = Math.min(maxLength, 4); len > 0; len--) {
             if (prev.endsWith(next.substring(0, len))) {
                 return next.substring(len); 
@@ -921,16 +913,14 @@
         updateStatus('connected', '待機中');
     });
 
-    // iOS/Android向け: タブのバックグラウンド切り替えや画面ロック復帰時の挙動を安全に制御
     document.addEventListener('visibilitychange', async () => {
         if (isRunning && document.visibilityState === 'visible') {
-            // 強制停止状態から安全に再スタートさせる（二重起動を防ぐ）
             if (restartTimer) clearTimeout(restartTimer);
             restartTimer = setTimeout(() => {
                 if (isRunning) {
                     try { recognition.start(); } catch(e) {}
                 }
-            }, 400);
+            }, 150); // タブ復帰時も最速で復帰
             await requestWakeLock();
         }
     });
