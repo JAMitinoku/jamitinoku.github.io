@@ -11,7 +11,7 @@ const cmsData = {
       category: "管理",
       title: "文字起こし",
       content: "「リアルタイム」と「音声ファイル」両対応の文字起こし（編集可）",
-      url: "https://jamitinoku.github.io/transcribex.html" // ← リンクがない場合は空欄にするだけ
+      url: "https://jamitinoku.github.io/transcribe.html" // ← リンクがない場合は空欄にするだけ
     },
     {
       id: 2,
