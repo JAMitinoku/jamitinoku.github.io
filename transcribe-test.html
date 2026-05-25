@@ -3,15 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高精度・素直な文字起こしツール</title>
+    <title>文字起こしツール</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; gap: 8px; background: #f4f4f9; }
-        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
-        .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; white-space: pre-wrap; line-height: 1.6; }
-        #final-text { font-size: 1.1em; color: #222; }
-        #interim-text { font-size: 1em; color: #888; border-top: 1px dashed #ccc; min-height: 40px; margin-top: 5px; font-style: italic; }
-        .info-bar { font-size: 0.8em; color: #555; padding: 5px; }
-        button { padding: 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        :root { --primary-bg: #f0f2f5; --panel-bg: #ffffff; --border-color: #ccd6dd; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; background: var(--primary-bg); gap: 10px; box-sizing: border-box; }
+        
+        .controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; background: var(--panel-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); }
+        button { padding: 10px; cursor: pointer; border: 1px solid #ccc; border-radius: 6px; background: #fff; font-weight: bold; }
+        button:active { background: #e0e0e0; }
+        
+        .area-container { flex-grow: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+        .area { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-y: auto; white-space: pre-wrap; }
+        #final-text { flex-grow: 2; font-size: 1.1em; line-height: 1.7; }
+        #interim-text { height: 60px; font-size: 1em; color: #666; font-style: italic; border: 1px dashed #aaa; }
+        
+        .status-bar { font-size: 0.85em; color: #555; padding: 5px; }
+        select, input { padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
@@ -27,21 +34,21 @@
         <label>感度: <input type="range" id="sensitivity" min="0.1" max="2.0" step="0.1" value="1.0"></label>
     </div>
 
-    <div id="final-text" class="area"></div>
-    <div id="interim-text" class="area"></div>
-    <div id="status" class="info-bar">状態: 準備完了</div>
+    <div class="area-container">
+        <div id="final-text" class="area"></div>
+        <div id="interim-text" class="area"></div>
+    </div>
+
+    <div id="status" class="status-bar">状態: 準備完了</div>
 
     <script>
-        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        let audioCtx, gainNode;
+        const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = 'ja-JP';
+        rec.maxAlternatives = 1;
 
-        recognition.lang = 'ja-JP';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        // マキシマム・レスポンス設定：予測を控えめにし、生の音声を優先
-        recognition.maxAlternatives = 1;
-
-        // デバイス初期化
+        // デバイス読み込み
         navigator.mediaDevices.enumerateDevices().then(devices => {
             const select = document.getElementById('device-select');
             devices.filter(d => d.kind === 'audioinput').forEach(d => {
@@ -52,31 +59,12 @@
             });
         });
 
-        async function setupAudio() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: document.getElementById('device-select').value || undefined } });
-            audioCtx = new AudioContext();
-            const source = audioCtx.createMediaStreamSource(stream);
-            gainNode = audioCtx.createGain();
-            gainNode.gain.value = document.getElementById('sensitivity').value;
-            source.connect(gainNode);
-        }
-
-        document.getElementById('sensitivity').oninput = (e) => { if (gainNode) gainNode.gain.value = e.target.value; };
-
-        // 認識ロジック：加工を減らし、聞いたままを表示
-        recognition.onresult = (event) => {
-            let final = '';
-            let interim = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                let text = event.results[i][0].transcript;
-                if (event.results[i].isFinal) {
-                    // 加工を最小限に。空行や記号のみは除外するが、文字はそのまま出す
-                    if (text.trim().length > 0) {
-                        final += text + '\n';
-                    }
-                } else {
-                    interim += text;
-                }
+        // ロジック
+        rec.onresult = (e) => {
+            let final = "", interim = "";
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) final += e.results[i][0].transcript;
+                else interim += e.results[i][0].transcript;
             }
             if (final) {
                 document.getElementById('final-text').innerText += final;
@@ -85,35 +73,17 @@
             document.getElementById('interim-text').innerText = interim;
         };
 
-        recognition.onend = () => {
-            if (!document.getElementById('stop-btn').disabled) {
-                setTimeout(() => recognition.start(), 100);
-            }
-        };
-
-        document.getElementById('start-btn').onclick = async () => {
-            await setupAudio();
-            recognition.start();
-            document.getElementById('start-btn').disabled = true;
-            document.getElementById('stop-btn').disabled = false;
-        };
-
-        document.getElementById('stop-btn').onclick = () => {
-            recognition.stop();
-            document.getElementById('start-btn').disabled = false;
-            document.getElementById('stop-btn').disabled = true;
-        };
-
-        document.getElementById('clear-btn').onclick = () => { document.getElementById('final-text').innerText = ''; document.getElementById('interim-text').innerText = ''; };
+        rec.onend = () => { if(!document.getElementById('stop-btn').disabled) rec.start(); };
+        
+        document.getElementById('start-btn').onclick = () => { rec.start(); document.getElementById('start-btn').disabled = true; document.getElementById('stop-btn').disabled = false; };
+        document.getElementById('stop-btn').onclick = () => { rec.stop(); document.getElementById('start-btn').disabled = false; document.getElementById('stop-btn').disabled = true; };
+        document.getElementById('clear-btn').onclick = () => { document.getElementById('final-text').innerText = ''; };
+        document.getElementById('reset-btn').onclick = () => location.reload();
         document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(document.getElementById('final-text').innerText);
         document.getElementById('save-btn').onclick = () => {
             const blob = new Blob([document.getElementById('final-text').innerText], {type: 'text/plain'});
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'log.txt';
-            a.click();
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'log.txt'; a.click();
         };
-        document.getElementById('reset-btn').onclick = () => location.reload();
     </script>
 </body>
 </html>
