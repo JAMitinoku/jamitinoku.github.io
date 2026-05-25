@@ -58,7 +58,7 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let finalizedText = ""; 
-    let globalIndex = 0; // 【重要】セッションをまたいでも重複を防ぐインデックス
+    let seenResults = new Set(); // 【追加】処理済みの結果を記録するハッシュセット
     let isUserStopping = false;
 
     async function refreshDeviceList() {
@@ -86,15 +86,14 @@
         
         recognition.onresult = (e) => {
             let interimText = "";
-            let newContent = "";
-            
-            // globalIndex以降のデータのみを処理する
-            for (let i = e.resultIndex; i < e.results.length; i++) {
+            for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
-                    if (text) {
+                    // 重複チェック: 既に確定済みとして記録されている場合はスキップ
+                    if (text && !seenResults.has(text)) {
                         if (!/[。！？]$/.test(text)) text += "。";
                         finalizedText += text + "\n";
+                        seenResults.add(text); // 記録に追加
                     }
                 } else {
                     interimText = e.results[i][0].transcript.trim();
@@ -128,6 +127,7 @@
 
     document.getElementById('btnClear').onclick = () => { 
         finalizedText = ""; 
+        seenResults.clear(); // 履歴もクリア
         document.getElementById('resultTextarea').value = ""; 
     };
     
