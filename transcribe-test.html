@@ -3,44 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定リアルタイム文字起こしツール (修正完成版)</title>
+    <title>超安定リアルタイム文字起こしツール (マイクブースト版)</title>
     <style>
-        :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; }
-        body, html { height: 100dvh; background-color: var(--bg-color); margin: 0; padding: 10px; box-sizing: border-box; }
-        .container { display: flex; flex-direction: column; height: 100%; gap: 10px; }
-        .status-panel { background: var(--card-bg); padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        #resultTextarea { flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 16px; resize: none; }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .sub-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
-        button { padding: 15px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
+        :root {
+            --bg-color: #f1f3f5;
+            --card-bg: #ffffff;
+            --text-color: #212529;
+            --border-color: #ced4da;
+            --primary: #007bff;
+            --success: #28a745;
+            --danger: #dc3545;
+            --secondary: #6c757d;
+            --accent: #e9ecef;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body, html {
+            height: 100%;
+            height: 100dvh;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .header {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: bold;
+        }
+
+        #resultTextarea {
+            flex: 1;
+            width: 100%;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: none;
+            background: var(--card-bg);
+            outline: none;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .sub-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:active { opacity: 0.7; }
+        button:disabled { background-color: var(--secondary); cursor: not-allowed; }
+        
+        .btn-start { background-color: var(--success); }
+        .btn-stop { background-color: var(--danger); }
+        .btn-sub { background-color: var(--secondary); font-size: 0.9rem; }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="status-panel">
-        <span id="statusText">待機中</span>
-        <select id="boostSelect"><option value="1">等倍</option><option value="1.5">1.5倍</option><option value="2">2.0倍</option></select>
+    <div class="container">
+        <div class="header">
+            <div id="statusBadge" class="status-badge" style="background:#e9ecef">待機中</div>
+            <select id="boostSelect" style="padding:5px">
+                <option value="1.0">等倍</option>
+                <option value="1.5">1.5倍</option>
+                <option value="2.0">2.0倍</option>
+            </select>
+        </div>
+        <textarea id="resultTextarea" readonly></textarea>
+        <div class="controls">
+            <button id="btnStart" class="btn-start">開始</button>
+            <button id="btnStop" class="btn-stop" disabled>停止</button>
+        </div>
+        <div class="sub-controls">
+            <button id="btnCopy" class="btn-sub">コピー</button>
+            <button id="btnSave" class="btn-sub">保存</button>
+            <button id="btnClear" class="btn-sub">消去</button>
+        </div>
     </div>
-    <textarea id="resultTextarea" readonly></textarea>
-    <div class="controls">
-        <button id="btnStart" style="background:var(--success)">開始</button>
-        <button id="btnStop" style="background:var(--danger)" disabled>停止</button>
-    </div>
-    <div class="sub-controls">
-        <button id="btnCopy" style="background:#6c757d">コピー</button>
-        <button id="btnSave" style="background:#6c757d">保存</button>
-        <button id="btnClear" style="background:#6c757d">消去</button>
-    </div>
-</div>
 
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, isRunning = false;
-    let finalizedBuffer = ""; // 確定済みテキストの累積バッファ
-    let lastFinal = ""; // 重複防止用
+    let finalizedLines = [];
+    let lastFinal = "";
 
-    const textarea = document.getElementById('resultTextarea');
-    const statusText = document.getElementById('statusText');
+    const resultTextarea = document.getElementById('resultTextarea');
+    const statusBadge = document.getElementById('statusBadge');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+
+    function updateStatus(type, text) {
+        statusBadge.innerText = text;
+        statusBadge.style.background = type === 'connected' ? '#d4edda' : '#f8d7da';
+    }
 
     function initRecognition() {
         recognition = new SpeechRecognition();
@@ -48,52 +143,68 @@
         recognition.continuous = true;
         recognition.interimResults = true;
 
-        recognition.onresult = (e) => {
+        recognition.onresult = (event) => {
             let interim = "";
-            let final = "";
-            
-            for (let i = e.resultIndex; i < e.results.length; ++i) {
-                let segment = e.results[i][0].transcript.trim();
-                if (e.results[i].isFinal) {
-                    // 重複除去と「。」の正規化：末尾の句点を一度削除してから「。」を1つ付与
-                    let cleanSegment = segment.replace(/。+$/, '');
-                    if (cleanSegment && cleanSegment !== lastFinal) {
-                        final += cleanSegment + "。\n";
-                        lastFinal = cleanSegment;
+            let newFinal = "";
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                let transcript = event.results[i][0].transcript.trim();
+                if (event.results[i].isFinal) {
+                    // 「。」の重複防止と、直前との重複排除
+                    let clean = transcript.replace(/。+$/, '');
+                    if (clean && clean !== lastFinal) {
+                        newFinal = clean + "。";
+                        finalizedLines.push(newFinal);
+                        lastFinal = clean;
                     }
                 } else {
-                    interim += segment;
+                    interim = transcript;
                 }
             }
-            if (final) finalizedBuffer += final;
-            textarea.value = finalizedBuffer + interim;
-            textarea.scrollTop = textarea.scrollHeight;
+            resultTextarea.value = finalizedLines.join("\n") + (interim ? "\n" + interim : "");
+            resultTextarea.scrollTop = resultTextarea.scrollHeight;
         };
 
-        recognition.onstart = () => { isRunning = true; statusText.innerText = "認識中..."; };
-        recognition.onend = () => { if (isRunning) recognition.start(); else statusText.innerText = "待機中"; };
+        recognition.onstart = () => { isRunning = true; updateStatus('connected', '認識中...'); };
+        recognition.onend = () => {
+            if (isRunning) recognition.start();
+            else updateStatus('disconnected', '待機中');
+        };
     }
 
-    document.getElementById('btnStart').onclick = () => {
-        initRecognition();
+    btnStart.addEventListener('click', () => {
+        if (!recognition) initRecognition();
         recognition.start();
-        document.getElementById('btnStart').disabled = true;
-        document.getElementById('btnStop').disabled = false;
-    };
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+    });
 
-    document.getElementById('btnStop').onclick = () => {
+    btnStop.addEventListener('click', () => {
         isRunning = false;
         recognition.stop();
-        document.getElementById('btnStart').disabled = false;
-        document.getElementById('btnStop').disabled = true;
-    };
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+    });
 
-    document.getElementById('btnClear').onclick = () => {
-        finalizedBuffer = ""; lastFinal = ""; textarea.value = "";
-    };
-    
-    // コピー・保存処理は元の仕様を継承
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
+    document.getElementById('btnClear').addEventListener('click', () => {
+        if (confirm("消去しますか？")) {
+            finalizedLines = [];
+            lastFinal = "";
+            resultTextarea.value = "";
+        }
+    });
+
+    document.getElementById('btnCopy').addEventListener('click', () => {
+        navigator.clipboard.writeText(resultTextarea.value).then(() => alert("コピーしました"));
+    });
+
+    document.getElementById('btnSave').addEventListener('click', () => {
+        const blob = new Blob([resultTextarea.value], {type: "text/plain"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "記録_" + new Date().getTime() + ".txt";
+        a.click();
+    });
 </script>
 </body>
 </html>
