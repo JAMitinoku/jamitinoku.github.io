@@ -4,86 +4,152 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>高精度音声認識ツール</title>
+    
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; }
-        .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; background: #f0f0f0; padding: 10px; border-radius: 5px; }
-        .area { flex-grow: 1; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 5px; }
-        #final-text { color: #333; }
-        #interim-text { color: #888; font-style: italic; }
-        .info-bar { font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
+        body { 
+            font-family: sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            margin: 0; 
+            padding: 15px; 
+            box-sizing: border-box; 
+            gap: 10px;
+        }
+
+        .controls { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            background: #f8f9fa; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid #ddd;
+        }
+
+        .area { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            border: 1px solid #ccc; 
+            padding: 15px; 
+            border-radius: 5px;
+            line-height: 1.6;
+            background: #fff;
+        }
+
+        #final-text { color: #222; font-size: 1.1em; }
+        #interim-text { color: #777; font-style: italic; border-top: 1px dashed #ccc; }
+
+        .info-bar { 
+            font-size: 0.9em; 
+            color: #555; 
+            padding: 5px; 
+        }
     </style>
 </head>
 <body>
 
-<div class="controls">
-    <button id="start-btn">開始</button>
-    <button id="stop-btn" disabled>停止</button>
-    <button id="copy-btn">コピー</button>
-    <button id="save-btn">保存</button>
-    <button id="clear-btn">クリア</button>
-    <select id="device-select"><option>デバイス読み込み中...</option></select>
-    <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100" style="width: 50px;"></label>
-    <label>ブースト: <input type="range" id="boost" min="1" max="20" value="1"></label>
-    <button id="reset-btn">デバイスリセット</button>
-</div>
+    <div class="controls">
+        <button id="start-btn">開始</button>
+        <button id="stop-btn" disabled>停止</button>
+        <button id="copy-btn">コピー</button>
+        <button id="save-btn">保存</button>
+        <button id="clear-btn">クリア</button>
+        
+        <select id="device-select"><option>デバイス読み込み中...</option></select>
+        
+        <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100" style="width: 40px;"></label>
+        <label>ブースト: <input type="range" id="boost" min="1" max="20" value="1"></label>
+        
+        <button id="reset-btn">デバイスリセット</button>
+    </div>
 
-<div id="final-text" class="area"></div>
-<div id="interim-text" class="area"></div>
-<div id="status" class="info-bar">状態: 準備完了 | 接続中</div>
+    <div id="final-text" class="area"></div>
+    <div id="interim-text" class="area"></div>
 
-<script>
-    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.lang = 'ja-JP';
-    recognition.continuous = true;
-    recognition.interimResults = true;
+    <div id="status" class="info-bar">状態: 準備完了</div>
 
-    const finalDiv = document.getElementById('final-text');
-    const interimDiv = document.getElementById('interim-text');
-    const status = document.getElementById('status');
+    <script>
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        
+        recognition.lang = 'ja-JP';
+        recognition.continuous = true;
+        recognition.interimResults = true;
 
-    recognition.onresult = (event) => {
-        let interim = '';
-        let final = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-            if (event.results[i].isFinal) {
-                final += event.results[i][0].transcript + '。';
-            } else {
-                interim += event.results[i][0].transcript;
+        const finalDiv = document.getElementById('final-text');
+        const interimDiv = document.getElementById('interim-text');
+        const status = document.getElementById('status');
+
+        recognition.onresult = (event) => {
+            let interim = '';
+            let final = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    // 確定テキストには句点をつけて改行で区切る
+                    final += event.results[i][0].transcript + '。\n';
+                } else {
+                    interim += event.results[i][0].transcript;
+                }
             }
-        }
-        finalDiv.innerText += final;
-        interimDiv.innerText = interim;
-    };
+            
+            finalDiv.innerText += final;
+            interimDiv.innerText = interim;
+        };
 
-    recognition.onend = () => {
-        status.innerText = "状態: 切断 - 自動復旧中...";
-        setTimeout(() => recognition.start(), 1000); // 自動復旧
-    };
+        recognition.onend = () => {
+            status.innerText = "状態: 自動復旧中...";
+            setTimeout(() => {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    status.innerText = "状態: 再開待ち...";
+                }
+            }, 500);
+        };
 
-    document.getElementById('start-btn').onclick = () => { recognition.start(); document.getElementById('start-btn').disabled = true; document.getElementById('stop-btn').disabled = false; status.innerText = "状態: 認識中"; };
-    document.getElementById('stop-btn').onclick = () => { recognition.stop(); document.getElementById('start-btn').disabled = false; document.getElementById('stop-btn').disabled = true; status.innerText = "状態: 停止"; };
-    document.getElementById('clear-btn').onclick = () => { finalDiv.innerText = ''; interimDiv.innerText = ''; };
-    document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(finalDiv.innerText);
-    
-    // デバイス取得（MediaDevices API）
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-        const select = document.getElementById('device-select');
-        select.innerHTML = '';
-        devices.filter(d => d.kind === 'audioinput').forEach(d => {
-            let opt = document.createElement('option');
-            opt.text = d.label || 'マイク';
-            select.add(opt);
+        document.getElementById('start-btn').onclick = () => {
+            recognition.start();
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('stop-btn').disabled = false;
+            status.innerText = "状態: 認識中";
+        };
+
+        document.getElementById('stop-btn').onclick = () => {
+            recognition.stop();
+            document.getElementById('start-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = true;
+            status.innerText = "状態: 停止";
+        };
+
+        document.getElementById('clear-btn').onclick = () => {
+            finalDiv.innerText = '';
+            interimDiv.innerText = '';
+        };
+
+        document.getElementById('copy-btn').onclick = () => {
+            navigator.clipboard.writeText(finalDiv.innerText);
+        };
+
+        document.getElementById('save-btn').onclick = () => {
+            const blob = new Blob([finalDiv.innerText], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'log.txt';
+            a.click();
+        };
+
+        // マイクデバイス列挙処理
+        navigator.mediaDevices.enumerateDevices().then(devices => {
+            const select = document.getElementById('device-select');
+            select.innerHTML = '';
+            devices.filter(d => d.kind === 'audioinput').forEach(d => {
+                let opt = document.createElement('option');
+                opt.text = d.label || 'マイク';
+                select.add(opt);
+            });
         });
-    });
-
-    document.getElementById('save-btn').onclick = () => {
-        const blob = new Blob([finalDiv.innerText], {type: 'text/plain'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'log.txt';
-        a.click();
-    };
-</script>
+    </script>
 </body>
 </html>
