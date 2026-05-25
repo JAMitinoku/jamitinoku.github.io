@@ -1,475 +1,89 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <title>文字起こしツール（保存ボタン追加）</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root {
-      --bg: #0f1220;
-      --card: #181b2b;
-      --text: #e9e9f0;
-      --muted: #a5a5b5;
-      --accent: #4ea8ff;
-      --green: #4cd964;
-      --red: #ff5c6c;
-    }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
-    .wrapper { min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; }
-    @media (max-width: 980px){
-      .wrapper { grid-template-columns: 1fr; }
-    }
-    .card { background: var(--card); border-radius: 12px; padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,.25); display: flex; flex-direction: column; min-height: 0; }
-    h2 { font-size: 1rem; margin: 0 0 8px; color: #fff; }
-    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    button, select, input, textarea {
-      background: #1e2030; color: #fff; border: 1px solid #2a2f55; border-radius: 6px; padding: 8px 10px;
-      font-size: 14px;
-    }
-    button.primary { background: #2d6af5; border-color: #2d6af5; }
-    button.warn { background: #ff5c6c; border-color: #ff5c6c; }
-    button.success { background: #29d07a; border-color: #29d07a; }
-    textarea { width: 100%; min-height: 140px; resize: vertical; background: #0e1220; color: #fff; border: 1px solid #2a2f55; border-radius: 6px; padding: 8px; overflow: auto; }
-    .gauge { height: 12px; background: #2a2f55; border-radius: 6px; position: relative; overflow: hidden; }
-    .gauge > span { display: block; height: 100%; background: linear-gradient(90deg, #4cd964, #4ea8ff); width: 0%; }
-    .status { font-family: monospace; padding: 6px 8px; border-radius: 6px; background: #11142a; border: 1px solid #2a2f55; }
-    .section-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .4px; }
-    .info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    @media (max-width: 600px){
-      .info { grid-template-columns: 1fr; }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高精度音声認識ツール</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; }
+        .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; background: #f0f0f0; padding: 10px; border-radius: 5px; }
+        .area { flex-grow: 1; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 5px; }
+        #final-text { color: #333; }
+        #interim-text { color: #888; font-style: italic; }
+        .info-bar { font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 5px; }
+    </style>
 </head>
 <body>
-  <div class="wrapper" id="app">
-    <!-- 左: 入力と設定 -->
-    <section class="card" aria-label="認識設定">
-      <h2>入力と認識設定</h2>
-      <div class="row" style="justify-content: space-between;">
-        <button id="startBtn" class="primary" title="開始">開始</button>
-        <button id="stopBtn" title="停止">停止</button>
-        <button id="copyBtn" title="コピー">コピー</button>
-        <button id="clearBtn" title="クリア">クリア</button>
-        <button id="saveBtn" title="保存">保存</button>
-      </div>
 
-      <div class="row" style="margin-top:8px;">
-        <label for="deviceSelect">入力デバイス選択:</label>
-        <select id="deviceSelect" title="入力デバイス選択" style="min-width: 180px;"></select>
-      </div>
+<div class="controls">
+    <button id="start-btn">開始</button>
+    <button id="stop-btn" disabled>停止</button>
+    <button id="copy-btn">コピー</button>
+    <button id="save-btn">保存</button>
+    <button id="clear-btn">クリア</button>
+    <select id="device-select"><option>デバイス読み込み中...</option></select>
+    <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100" style="width: 50px;"></label>
+    <label>ブースト: <input type="range" id="boost" min="1" max="20" value="1"></label>
+    <button id="reset-btn">デバイスリセット</button>
+</div>
 
-      <div class="row" style="margin-top:8px;">
-        <label for="sensitivitySelect">感度調整:</label>
-        <select id="sensitivitySelect" title="感度調整" style="min-width: 120px;"></select>
-      </div>
+<div id="final-text" class="area"></div>
+<div id="interim-text" class="area"></div>
+<div id="status" class="info-bar">状態: 準備完了 | 接続中</div>
 
-      <div class="row" style="margin-top:8px;">
-        <span class="section-title" aria-label="ブーストゲージ">ブースト</span>
-        <div class="gauge" style="flex:1"><span id="boostFill" style="width: 50%;"></span></div>
-        <span id="boostValue" class="status" style="min-width: 70px; text-align:center;">10</span>
-      </div>
+<script>
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.lang = 'ja-JP';
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
-      <div class="row" style="margin-top:8px;">
-        <span class="section-title" aria-label="感度レベルゲージ">感度レベル</span>
-        <div class="gauge" style="flex:1"><span id="sensitivityLevelFill" style="width: 40%;"></span></div>
-        <span id="sensitivityLevelValue" class="status" style="min-width: 70px; text-align:center;">40</span>
-      </div>
+    const finalDiv = document.getElementById('final-text');
+    const interimDiv = document.getElementById('interim-text');
+    const status = document.getElementById('status');
 
-      <div class="row" style="margin-top:8px;">
-        <button id="resetDeviceBtn" title="デバイスリセット">デバイスリセット</button>
-        <span id="serverStatus" class="status" title="音声認識サーバ接続状態" style="margin-left:auto;">接続済み</span>
-      </div>
-    </section>
-
-    <!-- 右: 認識エリア -->
-    <section class="card" aria-label="認識エリア表示" style="min-height: 300px;">
-      <h2>認識エリア</h2>
-
-      <div id="recognitionLive" class="section" style="display:block; margin-bottom:8px;">
-        <div class="row" style="justify-content: space-between; align-items: center;">
-          <span class="section-title" style="margin:0;">認識中エリア</span>
-          <span class="status" id="liveStatus" title="認識中の状態">待機</span>
-        </div>
-        <textarea id="liveText" placeholder="ここに認識途中の文字が表示されます..." rows="6" ></textarea>
-      </div>
-
-      <div id="confirmedArea" class="section" style="margin-bottom:8px;">
-        <div class="row" style="justify-content: space-between; align-items: center;">
-          <span class="section-title" style="margin:0;">認識確定エリア</span>
-          <span class="status" id="confirmedCount" title="確定済み文字数">0文字</span>
-        </div>
-        <textarea id="confirmedText" placeholder="確定済みの文字がここに表示されます..." rows="6" readonly></textarea>
-      </div>
-
-      <div id="infoArea" class="section" aria-label="情報表示エリア">
-        <div class="section-title" style="margin-bottom:6px;">情報表示エリア</div>
-        <div class="info" aria-label="状態情報">
-          <div>接続: <strong id="statusConnection">未知</strong></div>
-          <div>デバイス: <strong id="statusDevice">未選択</strong></div>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <script>
-    // 状態モデル
-    const state = {
-      connected: true,
-      device: null,
-      devices: [],
-      sensitivity: 50,
-      boost: 10,
-      liveBuffer: '',
-      confirmedBuffer: '',
-      inProgress: false,
-      retryDelay: 1000,
-      maxRetries: 5,
-      retries: 0,
-      recognition: null
+    recognition.onresult = (event) => {
+        let interim = '';
+        let final = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                final += event.results[i][0].transcript + '。';
+            } else {
+                interim += event.results[i][0].transcript;
+            }
+        }
+        finalDiv.innerText += final;
+        interimDiv.innerText = interim;
     };
 
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn  = document.getElementById('stopBtn');
-    const copyBtn  = document.getElementById('copyBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const deviceSelect = document.getElementById('deviceSelect');
-    const sensitivitySelect = document.getElementById('sensitivitySelect');
-    const boostFill = document.getElementById('boostFill');
-    const boostValue = document.getElementById('boostValue');
-    const sensitivityLevelFill = document.getElementById('sensitivityLevelFill');
-    const sensitivityLevelValue = document.getElementById('sensitivityLevelValue');
-    const resetDeviceBtn = document.getElementById('resetDeviceBtn');
-    const serverStatus = document.getElementById('serverStatus');
-    const liveText = document.getElementById('liveText');
-    const liveStatus = document.getElementById('liveStatus');
-    const confirmedText = document.getElementById('confirmedText');
-    const confirmedCount = document.getElementById('confirmedCount');
-    const statusConnection = document.getElementById('statusConnection');
-    const statusDevice = document.getElementById('statusDevice');
-    const infoArea = document.getElementById('infoArea');
+    recognition.onend = () => {
+        status.innerText = "状態: 切断 - 自動復旧中...";
+        setTimeout(() => recognition.start(), 1000); // 自動復旧
+    };
 
-    // 保存/ロード
-    function loadState() {
-      try {
-        const saved = localStorage.getItem('transcript_state');
-        if (saved) {
-          const obj = JSON.parse(saved);
-          Object.assign(state, obj);
-        }
-      } catch (e) {}
-      updateUI();
-    }
-    function saveState() {
-      try {
-        localStorage.setItem('transcript_state', JSON.stringify({
-          connected: state.connected,
-          device: state.device,
-          devices: state.devices,
-          sensitivity: state.sensitivity,
-          boost: state.boost,
-          liveBuffer: state.liveBuffer,
-          confirmedBuffer: state.confirmedBuffer,
-          inProgress: state.inProgress,
-          retries: state.retries
-        }));
-      } catch (e) {}
-    }
-
-    async function enumerateDevices() {
-      let dummy = [];
-      const hasMedia = !!(navigator.mediaDevices && navigator.mediaDevices.enumerateDevices);
-      if (hasMedia) {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          dummy = devices.filter(d => d.kind === 'audioinput').map((d, i) => ({
-            id: d.deviceId || `mic-${i}`,
-            label: d.label || `マイク ${i + 1}`
-          }));
-        } catch (e) {
-          dummy = [
-            { id: 'default', label: 'デフォルトマイク' },
-            { id: 'mic1', label: 'マイク 1' }
-          ];
-        }
-      } else {
-        dummy = [
-          { id: 'default', label: 'デフォルトマイク' },
-          { id: 'mic1', label: 'マイク 1' }
-        ];
-      }
-      if (dummy.length === 0) dummy = [{ id: 'default', label: 'デフォルトマイク' }];
-      state.devices = dummy;
-      deviceSelect.innerHTML = '';
-      dummy.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = d.label;
-        deviceSelect.appendChild(opt);
-      });
-      state.device = dummy[0].id;
-      deviceSelect.value = state.device;
-      statusDevice.textContent = dummy[0].label;
-    }
-
-    function populateSensitivity() {
-      for (let i = 1; i <= 100; i++) {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = i;
-        if (i === state.sensitivity) opt.selected = true;
-        sensitivitySelect.appendChild(opt);
-      }
-    }
-
-    function updateUI() {
-      boostFill.style.width = (state.boost / 20 * 100) + '%';
-      boostValue.textContent = String(state.boost);
-
-      const sl = Math.max(0, Math.min(100, Math.round(state.sensitivity)));
-      sensitivityLevelFill.style.width = sl + '%';
-      sensitivityLevelValue.textContent = sl;
-
-      statusConnection.textContent = state.connected ? '接続済み' : '切断';
-      serverStatus.textContent = state.connected ? '接続済み' : '切断';
-      statusDevice.textContent = state.device ? (state.devices.find(d => d.id === state.device)?.label ?? '選択済') : '未選択';
-
-      liveStatus.textContent = state.inProgress ? '認識中' : '待機';
-      liveText.value = state.liveBuffer;
-      confirmedText.value = state.confirmedBuffer;
-      confirmedCount.textContent = `${state.confirmedBuffer.length}文字`;
-
-      // オートスクロール
-      requestAnimationFrame(() => {
-        if (liveText.scrollHeight > liveText.clientHeight) liveText.scrollTop = liveText.scrollHeight;
-        if (confirmedText.scrollHeight > confirmedText.clientHeight) confirmedText.scrollTop = confirmedText.scrollHeight;
-      });
-
-      saveState();
-    }
-
-    function appendLive(text) {
-      if (!text) return;
-      state.liveBuffer += text;
-      liveText.value = state.liveBuffer;
-      requestAnimationFrame(() => {
-        if (liveText.scrollHeight > liveText.clientHeight) liveText.scrollTop = liveText.scrollHeight;
-      });
-    }
-
-    function confirmLiveToConfirmed() {
-      if (!state.liveBuffer) return;
-      let text = state.liveBuffer;
-      text = text.replace(/\n+/g, '\n');
-      state.confirmedBuffer += text;
-      state.liveBuffer = '';
-      liveText.value = state.liveBuffer;
-      confirmedText.value = state.confirmedBuffer;
-      confirmedCount.textContent = `${state.confirmedBuffer.length}文字`;
-      updateUI();
-    }
-
-    function ensureRecognition() {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        return null;
-      }
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const rec = new SR();
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.lang = 'ja-JP';
-      rec.onresult = (event) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const r = event.results[i];
-          const transcript = r[0].transcript;
-          if (r.isFinal) {
-            state.liveBuffer += transcript;
-            confirmLiveToConfirmed();
-          }
-        }
-        liveText.value = state.liveBuffer;
-        requestAnimationFrame(() => {
-          if (liveText.scrollHeight > liveText.clientHeight) liveText.scrollTop = liveText.scrollHeight;
+    document.getElementById('start-btn').onclick = () => { recognition.start(); document.getElementById('start-btn').disabled = true; document.getElementById('stop-btn').disabled = false; status.innerText = "状態: 認識中"; };
+    document.getElementById('stop-btn').onclick = () => { recognition.stop(); document.getElementById('start-btn').disabled = false; document.getElementById('stop-btn').disabled = true; status.innerText = "状態: 停止"; };
+    document.getElementById('clear-btn').onclick = () => { finalDiv.innerText = ''; interimDiv.innerText = ''; };
+    document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(finalDiv.innerText);
+    
+    // デバイス取得（MediaDevices API）
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+        const select = document.getElementById('device-select');
+        select.innerHTML = '';
+        devices.filter(d => d.kind === 'audioinput').forEach(d => {
+            let opt = document.createElement('option');
+            opt.text = d.label || 'マイク';
+            select.add(opt);
         });
-      };
-      rec.onerror = (e) => {
-        console.error('SpeechRecognition error', e);
-        if (state.inProgress) restartRecognitionWithDelay();
-      };
-      rec.onend = () => {
-        if (state.inProgress) restartRecognitionWithDelay();
-      };
-      return rec;
-    }
-
-    function restartRecognitionWithDelay() {
-      if (state.inProgress) {
-        if (state.retries < state.maxRetries) {
-          setTimeout(() => startSpeechRecognition(), state.retryDelay);
-          state.retries++;
-        } else {
-          stopRecognition();
-        }
-      }
-    }
-
-    function startSpeechRecognition() {
-      if (state.recognition) return;
-      const rec = ensureRecognition();
-      if (!rec) return;
-      state.recognition = rec;
-      rec.start();
-      state.inProgress = true;
-      state.retries = 0;
-      updateUI();
-    }
-
-    function stopSpeechRecognition() {
-      if (state.recognition) {
-        try { state.recognition.stop(); } catch(e) {}
-        state.recognition = null;
-      }
-      state.inProgress = false;
-      updateUI();
-    }
-
-    function startRecognition() {
-      // 権限を取得して開始
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        stream.getTracks().forEach(t => t.enabled = true);
-        startSpeechRecognition();
-      }).catch(err => {
-        console.warn('マイク権限が必要です。ダミー動作を有効化します。', err);
-        if (!state.inProgress) {
-          state.inProgress = true;
-          updateUI();
-          if (!state.dummyInterval) {
-            state.dummyInterval = setInterval(() => {
-              const samples = ['こんにちは', '今日の天気は良いですね', 'AIは便利です'];
-              const s = samples[Math.floor(Math.random() * samples.length)];
-              appendLive(s);
-              if (state.liveBuffer.length > 20) confirmLiveToConfirmed();
-              updateUI();
-            }, 700);
-          }
-        }
-      });
-    }
-
-    function stopRecognition() {
-      stopSpeechRecognition();
-      if (state.dummyInterval) {
-        clearInterval(state.dummyInterval);
-        state.dummyInterval = null;
-      }
-      updateUI();
-    }
-
-    async function copyToClipboard() {
-      try {
-        const text = confirmedText.value;
-        if (!text) return;
-        await navigator.clipboard.writeText(text);
-        alert('コピーしました');
-      } catch (e) {
-        prompt('コピーできませんでした。以下を選択してコピーしてください：', confirmedText.value);
-      }
-    }
-
-    function exportSavedData() {
-      // 保存データをクリップボードへエクスポート
-      const payload = JSON.stringify({ confirmed: state.confirmedBuffer, live: state.liveBuffer });
-      navigator.clipboard.writeText(payload).then(() => {
-        alert('保存データをクリップボードにコピーしました');
-      }).catch(() => {
-        alert('保存データのコピーに失敗しました');
-      });
-    }
-
-    function importSavedData(text) {
-      try {
-        const obj = JSON.parse(text);
-        if (obj.confirmed !== undefined) state.confirmedBuffer = obj.confirmed;
-        if (obj.live !== undefined) state.liveBuffer = obj.live;
-        updateUI();
-      } catch (e) {
-        // 形式が違えば無視
-      }
-    }
-
-    function resetDeviceSelection() {
-      enumerateDevices();
-      if (state.devices.length) {
-        const first = state.devices[0];
-        state.device = first.id;
-        deviceSelect.value = first.id;
-        statusDevice.textContent = first.label;
-      }
-      state.connected = true;
-      updateUI();
-    }
-
-    // 新規「保存」機能
-    function saveAllData() {
-      // 現在の全状態を保存
-      saveState();
-      // 簡易通知
-      alert('保存しました');
-    }
-
-    // イベント設定
-    startBtn.addEventListener('click', () => { startRecognition(); updateUI(); });
-    stopBtn.addEventListener('click', () => { stopRecognition(); updateUI(); });
-    copyBtn.addEventListener('click', () => { copyToClipboard(); });
-    clearBtn.addEventListener('click', () => {
-      state.liveBuffer = '';
-      state.confirmedBuffer = '';
-      liveText.value = '';
-      confirmedText.value = '';
-      updateUI();
-    });
-    saveBtn.addEventListener('click', () => { saveAllData(); });
-
-    deviceSelect.addEventListener('change', (e) => {
-      state.device = e.target.value;
-      const label = state.devices.find(d => d.id === state.device)?.label ?? 'デバイス';
-      statusDevice.textContent = label;
-      updateUI();
     });
 
-    sensitivitySelect.addEventListener('change', (e) => {
-      const v = parseInt(e.target.value, 10);
-      if (!Number.isNaN(v)) {
-        state.sensitivity = v;
-        updateUI();
-      }
-    });
-
-    resetDeviceBtn.addEventListener('click', () => { resetDeviceSelection(); });
-
-    function simulateServerDisconnect() {
-      if (Math.random() < 0.03) {
-        state.connected = false;
-        updateUI();
-        setTimeout(() => { state.connected = true; updateUI(); }, 3000);
-      }
-    }
-
-    function init() {
-      enumerateDevices();
-      populateSensitivity();
-      updateUI();
-      setInterval(() => { simulateServerDisconnect(); }, 2000);
-    }
-
-    window.addEventListener('resize', () => {});
-
-    loadState();
-    init();
-
-    // ページ離脱前に状態を保存
-    window.addEventListener('beforeunload', saveState);
-  </script>
+    document.getElementById('save-btn').onclick = () => {
+        const blob = new Blob([finalDiv.innerText], {type: 'text/plain'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'log.txt';
+        a.click();
+    };
+</script>
 </body>
 </html>
