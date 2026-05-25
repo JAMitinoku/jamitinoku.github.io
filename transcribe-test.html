@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文字起こしツール</title>
+    <title>文字起こしツール（ダブリ防止版）</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -57,10 +57,12 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
-    let finalizedLog = [];
+    let finalizedLog = []; // 確定済みテキストのリスト
+    let processedCount = 0; // 処理済みセグメント数
     let isUserStopping = false;
     const maxDisplayLines = 15;
 
+    // デバイス取得などの初期化ロジックは省略（以前の通り）
     async function refreshDeviceList() {
         try {
             await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -78,8 +80,7 @@
     }
 
     function updateDisplay(interimText) {
-        // 表示する行数制限と空行除去
-        const displayLog = finalizedLog.filter(line => line.trim().length > 0).slice(-maxDisplayLines);
+        const displayLog = finalizedLog.slice(-maxDisplayLines);
         let text = displayLog.join("\n");
         if (finalizedLog.length > maxDisplayLines) text = "…\n" + text;
         
@@ -93,19 +94,25 @@
         recognition.continuous = true;
         recognition.interimResults = true;
         
+        // 認識開始時にインデックスをリセット
+        processedCount = 0;
+        
         recognition.onresult = (e) => {
             let interimText = "";
-            // e.resultIndexを使用して、新規に確定した結果だけを処理する
-            for (let i = e.resultIndex; i < e.results.length; i++) {
-                if (e.results[i].isFinal) {
-                    const transcript = e.results[i][0].transcript.trim();
-                    if (transcript.length > 0) {
-                        let text = transcript;
-                        if (!/[。！？]$/.test(text)) text += "。";
-                        finalizedLog.push(text);
+            
+            // 今回受け取った全結果をループする
+            for (let i = 0; i < e.results.length; i++) {
+                // まだ処理していない結果のみを抽出（i >= processedCount）
+                if (i >= processedCount) {
+                    if (e.results[i].isFinal) {
+                        const transcript = e.results[i][0].transcript.trim();
+                        if (transcript.length > 0) {
+                            finalizedLog.push(transcript + "。");
+                            processedCount++; // 処理済みとしてカウントアップ
+                        }
+                    } else {
+                        interimText = e.results[i][0].transcript.trim();
                     }
-                } else {
-                    interimText = e.results[i][0].transcript.trim();
                 }
             }
             updateDisplay(interimText);
@@ -118,7 +125,8 @@
 
         recognition.onend = () => {
             if (!isUserStopping) {
-                try { recognition.start(); } catch(e) { console.log("再起動待ち..."); }
+                // ループ再起動
+                try { recognition.start(); } catch(e) {}
             } else {
                 document.getElementById('statusBadge').innerText = "待機中";
                 document.getElementById('statusBadge').style.background = "#e9ecef";
@@ -141,7 +149,12 @@
         document.getElementById('btnStop').disabled = true;
     };
 
-    document.getElementById('btnClear').onclick = () => { finalizedLog = []; updateDisplay(); };
+    document.getElementById('btnClear').onclick = () => { 
+        finalizedLog = []; 
+        processedCount = 0;
+        updateDisplay(); 
+    };
+    
     document.getElementById('btnCopy').onclick = () => { navigator.clipboard.writeText(finalizedLog.join("\n")); alert("コピーしました"); };
 
     refreshDeviceList();
