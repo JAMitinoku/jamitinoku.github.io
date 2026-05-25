@@ -13,7 +13,7 @@
         .config-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         select { flex: 1; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.8rem; }
         .header { display: flex; gap: 10px; align-items: center; }
-        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
+        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; transition: background 0.3s; }
         #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .sub-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
@@ -103,12 +103,41 @@
             }
             updateDisplay(interimText);
         };
-        recognition.onstart = () => { document.getElementById('statusBadge').innerText = "認識中"; };
-        recognition.onend = () => { document.getElementById('statusBadge').innerText = "待機中"; };
+
+        recognition.onstart = () => {
+            document.getElementById('statusBadge').innerText = "認識中";
+            document.getElementById('statusBadge').style.background = "#d4edda";
+        };
+
+        recognition.onend = () => {
+            document.getElementById('statusBadge').innerText = "待機中";
+            document.getElementById('statusBadge').style.background = "#e9ecef";
+            document.getElementById('btnStart').disabled = false;
+            document.getElementById('btnStop').disabled = true;
+        };
+
+        recognition.onerror = (e) => {
+            console.error("エラー発生:", e.error);
+            alert("エラーが発生しました: " + e.error);
+        };
     }
 
-    document.getElementById('btnStart').onclick = () => { initRecognition(); recognition.start(); document.getElementById('btnStart').disabled = true; document.getElementById('btnStop').disabled = false; };
-    document.getElementById('btnStop').onclick = () => { recognition.stop(); document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; };
+    document.getElementById('btnStart').onclick = async () => {
+        try {
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            initRecognition();
+            recognition.start();
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnStop').disabled = false;
+        } catch (e) {
+            alert("マイクへのアクセスが許可されていません。");
+        }
+    };
+
+    document.getElementById('btnStop').onclick = () => {
+        if(recognition) recognition.stop();
+    };
+
     document.getElementById('btnClear').onclick = () => { finalizedLog = []; updateDisplay(); };
     document.getElementById('btnCopy').onclick = () => { navigator.clipboard.writeText(finalizedLog.join("\n")); alert("コピーしました"); };
 
