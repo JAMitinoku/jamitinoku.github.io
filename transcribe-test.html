@@ -42,14 +42,22 @@
 
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition, isRunning = false;
-    let finalizedLog = []; // 確定文を隔離・保護する配列
-    let lastRenderedText = ""; // 描画負荷軽減用キャッシュ
+    let recognition = null;
+    let isRunning = false;
+    let finalizedLog = [];
+    let lastRenderedText = "";
 
     const textarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
 
     function initRecognition() {
+        // 【重複回避策】既にインスタンスがあれば破棄する
+        if (recognition) {
+            recognition.onend = null;
+            recognition.stop();
+            recognition = null;
+        }
+
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
@@ -57,30 +65,30 @@
 
         recognition.onresult = (e) => {
             let interimText = "";
-            let hasNewFinal = false;
+            let newFinals = [];
 
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
-                    // 句読点補完
                     if (text && !/[。！？]$/.test(text)) text += "。";
                     
-                    // Chrome重複回避と追加
+                    // 重複判定：直前の確定結果と同じなら無視する
                     if (text && finalizedLog[finalizedLog.length - 1] !== text) {
-                        finalizedLog.push(text);
-                        hasNewFinal = true;
+                        newFinals.push(text);
                     }
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
 
-            // フリーズ回避：変化時のみDOM更新
+            newFinals.forEach(text => { finalizedLog.push(text); });
+
             const currentDisplay = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
+            
+            // 描画の差分更新
             if (currentDisplay !== lastRenderedText) {
                 textarea.value = currentDisplay;
-                // スクロール処理の頻度抑制
-                if (hasNewFinal) textarea.scrollTop = textarea.scrollHeight;
+                textarea.scrollTop = textarea.scrollHeight;
                 lastRenderedText = currentDisplay;
             }
         };
@@ -93,7 +101,7 @@
     }
 
     document.getElementById('btnStart').onclick = () => {
-        if (!recognition) initRecognition();
+        initRecognition();
         recognition.start();
         document.getElementById('btnStart').disabled = true;
         document.getElementById('btnStop').disabled = false;
@@ -101,7 +109,7 @@
 
     document.getElementById('btnStop').onclick = () => {
         isRunning = false;
-        recognition.stop();
+        if(recognition) recognition.stop();
         document.getElementById('btnStart').disabled = false;
         document.getElementById('btnStop').disabled = true;
     };
