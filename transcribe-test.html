@@ -57,9 +57,9 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
+    let finalizedText = ""; // 確定した文を蓄積する変数
     let isUserStopping = false;
 
-    // デバイス取得（変更なし）
     async function refreshDeviceList() {
         try {
             await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -85,33 +85,20 @@
         
         recognition.onresult = (e) => {
             let interimText = "";
-            let finalOutput = "";
-
-            // ★ここがダブリ解消の心臓部
-            // 過去のループを捨て、e.resultIndexから始まる「今回確定したデータのみ」を処理する
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
                     if (text) {
                         if (!/[。！？]$/.test(text)) text += "。";
-                        document.getElementById('resultTextarea').value += text + "\n";
+                        finalizedText += text + "\n"; // 変数に蓄積
                     }
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
-            
-            // 認識中の文字を表示するため、textareaの末尾に編集中テキストを一時的にくっつける
-            const baseText = document.getElementById('resultTextarea').value.split('\n').filter(l => l).join('\n');
-            // 確定分以外の「編集中」の表示（簡易更新）
-            const area = document.getElementById('resultTextarea');
-            if (interimText) {
-                // UI上、確定済みリストの下に編集中テキストを一時表示（ダブらせない）
-                area.value = baseText + (baseText ? "\n" : "") + interimText;
-            } else {
-                area.value = baseText;
-            }
-            area.scrollTop = area.scrollHeight;
+            // 確定分 ＋ 認識中のテキスト を単純にセット
+            document.getElementById('resultTextarea').value = finalizedText + interimText;
+            document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
         };
 
         recognition.onstart = () => { document.getElementById('statusBadge').innerText = "認識中"; };
@@ -136,8 +123,12 @@
         document.getElementById('btnStop').disabled = true;
     };
 
-    document.getElementById('btnClear').onclick = () => document.getElementById('resultTextarea').value = "";
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(document.getElementById('resultTextarea').value);
+    document.getElementById('btnClear').onclick = () => { 
+        finalizedText = ""; 
+        document.getElementById('resultTextarea').value = ""; 
+    };
+    
+    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(finalizedText);
 
     refreshDeviceList();
 </script>
