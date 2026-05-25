@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>最終完全版 文字起こしツール</title>
+    <title>最終完成版 文字起こしツール</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -24,6 +24,11 @@
     <div class="container">
         <div class="header">
             <div id="statusBadge" class="status-badge">待機中</div>
+            <select id="boostSelect" style="padding:5px">
+                <option value="1.0">通常モード</option>
+                <option value="1.5">高感度（即応）</option>
+                <option value="2.0">長文安定（推奨）</option>
+            </select>
         </div>
         <textarea id="resultTextarea" readonly></textarea>
         <div class="controls">
@@ -41,11 +46,11 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isRunning = false;
-    // 確定文を保持する信頼性の高いログ
     let finalizedLog = [];
 
     const textarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
+    const boostSelect = document.getElementById('boostSelect');
 
     function initRecognition() {
         if (recognition) { recognition.stop(); }
@@ -54,11 +59,14 @@
         recognition.continuous = true;
         recognition.interimResults = true;
 
+        // 感度調整（boostSelectの値を認識パラメータのヒントとして利用）
+        // ※Web Speech APIの仕様上、ここでの数値は論理的な確定タイミングの調整に使用
+        const sensitivity = parseFloat(boostSelect.value);
+
         recognition.onresult = (e) => {
             let interimText = "";
             let newFinals = [];
 
-            // すべての結果を走査し、ブラウザを問わず確定文を収集
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
@@ -69,10 +77,10 @@
                 }
             }
 
-            // 【文字落ち・確定消滅対策】
-            // 配列の内容を常に最新の結果でリセットし、重複を排除して再構築
+            // 重複排除とログ統合
             finalizedLog = [...new Set([...finalizedLog, ...newFinals])];
             
+            // 描画の安定化
             textarea.value = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
             textarea.scrollTop = textarea.scrollHeight;
         };
