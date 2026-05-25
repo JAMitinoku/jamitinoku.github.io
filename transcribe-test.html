@@ -82,29 +82,30 @@
         recognition.continuous = true;
         recognition.interimResults = true;
 
-        let lastInterim = "";
-
         recognition.onresult = (e) => {
             const area = document.getElementById('resultTextarea');
-            let content = area.value;
+            let lines = area.value.split('\n');
+            let lastLine = lines[lines.length - 1]; // 現在表示中の最後の行（編集中行）
 
-            for (let i = e.resultIndex; i < e.results.length; i++) {
+            for (let i = 0; i < e.results.length; i++) {
                 let transcript = e.results[i][0].transcript.trim();
-
+                
                 if (e.results[i].isFinal) {
-                    // 「直前まで表示していた編集中テキスト」と今回確定したテキストが重複していたら削除
-                    if (content.endsWith(lastInterim)) {
-                        content = content.slice(0, -lastInterim.length).trim();
+                    // 確定テキストが、既に存在している行と一致していれば追加しない
+                    if (!area.value.includes(transcript)) {
+                        if (!/[。！？]$/.test(transcript)) transcript += "。";
+                        // 編集中テキストを消して確定分を追加
+                        lines.pop(); 
+                        lines.push(transcript);
+                        lines.push(""); // 次の編集中行のための空行
+                        area.value = lines.join('\n').trim();
                     }
-                    if (!/[。！？]$/.test(transcript)) transcript += "。";
-                    content += (content ? "\n" : "") + transcript + "\n";
-                    lastInterim = "";
                 } else {
-                    // 現在編集中の中間テキストを一時保持
-                    lastInterim = transcript;
+                    // 編集中テキストを更新
+                    lines[lines.length - 1] = transcript;
+                    area.value = lines.join('\n');
                 }
             }
-            area.value = content + (lastInterim ? "\n" + lastInterim : "");
             area.scrollTop = area.scrollHeight;
         };
 
