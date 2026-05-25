@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高精度音声認識ツール</title>
+    <title>高精度文字起こしツール</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; gap: 10px; background: #f4f4f9; }
-        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05); }
-        #final-text { font-size: 1.1em; line-height: 1.8; color: #333; min-height: 100px; }
-        #interim-text { font-size: 1em; color: #999; font-style: italic; min-height: 30px; border-top: 2px solid #eee; margin-top: 5px; }
-        .info-bar { font-size: 0.85em; color: #666; background: #e9ecef; padding: 5px 10px; border-radius: 4px; }
-        button { padding: 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
-        button:active { background: #e0e0e0; }
-        select, input { padding: 5px; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
+        #final-text { font-size: 1.1em; line-height: 1.8; color: #333; white-space: pre-wrap; }
+        #interim-text { font-size: 1em; color: #999; font-style: italic; border-top: 2px solid #eee; margin-top: 5px; height: 50px; }
+        .info-bar { font-size: 0.85em; color: #666; padding: 5px; }
+        button { padding: 10px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        button:disabled { background: #eee; color: #999; }
+        select, input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -24,12 +24,12 @@
         <button id="copy-btn">コピー</button>
         <button id="save-btn">保存</button>
         <button id="clear-btn">クリア</button>
-        <select id="device-select"><option>デバイス読み込み中...</option></select>
-        <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100" style="width:40px"></label>
+        <select id="device-select"><option>デバイス確認中...</option></select>
+        <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100"></label>
         <button id="reset-btn">リセット</button>
     </div>
 
-    <div id="final-text" class="area"></div>
+    <div id="final-text" class="area" placeholder="確定テキストがここに表示されます..."></div>
     <div id="interim-text" class="area"></div>
     <div id="status" class="info-bar">状態: 準備完了</div>
 
@@ -49,6 +49,8 @@
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     let text = event.results[i][0].transcript.trim();
+                    // 空文字・「。」のみ・重複文字のフィルタリング
+                    if (text.length === 0 || text === '。') continue;
                     if (!text.endsWith('。') && !text.endsWith('？') && !text.endsWith('！')) text += '。';
                     final += text + '\n';
                 } else {
@@ -56,12 +58,7 @@
                 }
             }
             if (final) {
-                // 重複防止：末尾が句点で終わっている場合に「。」を二重挿入しない
-                if (finalDiv.innerText.endsWith('。\n') && final.startsWith('。')) {
-                    finalDiv.innerText += final.slice(1);
-                } else {
-                    finalDiv.innerText += final;
-                }
+                finalDiv.innerText += final;
                 finalDiv.scrollTop = finalDiv.scrollHeight;
             }
             interimDiv.innerText = interim;
@@ -69,8 +66,8 @@
 
         recognition.onend = () => {
             if (!document.getElementById('stop-btn').disabled) {
-                status.innerText = "状態: 再接続中...";
-                setTimeout(() => recognition.start(), 500);
+                status.innerText = "状態: 自動復旧中...";
+                setTimeout(() => recognition.start(), 300);
             }
         };
 
@@ -78,25 +75,24 @@
             recognition.start();
             document.getElementById('start-btn').disabled = true;
             document.getElementById('stop-btn').disabled = false;
-            status.innerText = "状態: 録音中...";
+            status.innerText = "状態: 録音中";
         };
 
         document.getElementById('stop-btn').onclick = () => {
             recognition.stop();
             document.getElementById('start-btn').disabled = false;
             document.getElementById('stop-btn').disabled = true;
-            status.innerText = "状態: 停止中";
+            status.innerText = "状態: 停止";
         };
 
         document.getElementById('clear-btn').onclick = () => { finalDiv.innerText = ''; interimDiv.innerText = ''; };
         document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(finalDiv.innerText);
         document.getElementById('reset-btn').onclick = () => location.reload();
-        
         document.getElementById('save-btn').onclick = () => {
             const blob = new Blob([finalDiv.innerText], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'memo_' + new Date().getTime() + '.txt';
+            a.download = 'log_' + new Date().toLocaleDateString() + '.txt';
             a.click();
         };
 
