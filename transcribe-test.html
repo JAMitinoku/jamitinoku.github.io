@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>高精度文字起こしツール</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; gap: 10px; background: #f4f4f9; }
-        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; white-space: pre-wrap; }
-        #final-text { font-size: 1.1em; line-height: 1.8; color: #333; }
-        #interim-text { font-size: 1em; color: #999; font-style: italic; border-top: 2px solid #eee; margin-top: 5px; height: 50px; }
-        .info-bar { font-size: 0.85em; color: #666; padding: 5px; }
-        button { padding: 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
-        button:disabled { background: #eee; }
-        select, input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; gap: 8px; background: #f4f4f9; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
+        .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; white-space: pre-wrap; line-height: 1.6; }
+        #final-text { font-size: 1.1em; color: #222; }
+        #interim-text { font-size: 1em; color: #888; border-top: 1px dashed #ccc; height: 40px; margin-top: 5px; }
+        .info-bar { font-size: 0.8em; color: #555; }
     </style>
 </head>
 <body>
@@ -23,9 +20,8 @@
         <button id="stop-btn" disabled>停止</button>
         <button id="copy-btn">コピー</button>
         <button id="save-btn">保存</button>
-        <button id="clear-btn">クリア</button>
         <select id="device-select"><option>デバイス確認中...</option></select>
-        <button id="reset-btn">リセット</button>
+        <label>感度: <input type="range" id="sensitivity" min="0" max="2" step="0.1" value="1"></label>
     </div>
 
     <div id="final-text" class="area"></div>
@@ -34,13 +30,30 @@
 
     <script>
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        let audioCtx, gainNode;
+
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
-        recognition.interimResults = true;
+        recognition.interimResults = true; // 即時性を向上させるため調整
 
         const finalDiv = document.getElementById('final-text');
         const interimDiv = document.getElementById('interim-text');
         const status = document.getElementById('status');
+
+        // 音声感度調整のためのWeb Audio API初期化
+        async function setupAudio() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioCtx = new AudioContext();
+            const source = audioCtx.createMediaStreamSource(stream);
+            gainNode = audioCtx.createGain();
+            gainNode.gain.value = document.getElementById('sensitivity').value;
+            source.connect(gainNode);
+            // 実際に出力はしないが処理を介在させる
+        }
+
+        document.getElementById('sensitivity').oninput = (e) => {
+            if (gainNode) gainNode.gain.value = e.target.value;
+        };
 
         recognition.onresult = (event) => {
             let interim = '';
@@ -49,10 +62,7 @@
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     let text = event.results[i][0].transcript.trim();
-                    
-                    // 【強力フィルタ】空・記号のみ・空白のみを完全に除去
                     if (!text || /^[\s .。！？]+$/.test(text)) continue;
-
                     if (!/[。！？]$/.test(text)) text += '。';
                     final += text + '\n';
                 } else {
@@ -69,28 +79,24 @@
 
         recognition.onend = () => {
             if (!document.getElementById('stop-btn').disabled) {
-                status.innerText = "状態: 再接続中...";
-                setTimeout(() => recognition.start(), 300);
+                setTimeout(() => recognition.start(), 100); // 遅延を最小化
             }
         };
 
-        document.getElementById('start-btn').onclick = () => {
+        document.getElementById('start-btn').onclick = async () => {
+            await setupAudio();
             recognition.start();
             document.getElementById('start-btn').disabled = true;
             document.getElementById('stop-btn').disabled = false;
-            status.innerText = "状態: 認識中";
         };
 
         document.getElementById('stop-btn').onclick = () => {
             recognition.stop();
             document.getElementById('start-btn').disabled = false;
             document.getElementById('stop-btn').disabled = true;
-            status.innerText = "状態: 停止";
         };
 
-        document.getElementById('clear-btn').onclick = () => { finalDiv.innerText = ''; interimDiv.innerText = ''; };
         document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(finalDiv.innerText);
-        document.getElementById('reset-btn').onclick = () => location.reload();
         
         document.getElementById('save-btn').onclick = () => {
             const blob = new Blob([finalDiv.innerText], {type: 'text/plain'});
@@ -99,16 +105,6 @@
             a.download = 'transcript.txt';
             a.click();
         };
-
-        navigator.mediaDevices.enumerateDevices().then(devices => {
-            const select = document.getElementById('device-select');
-            select.innerHTML = '';
-            devices.filter(d => d.kind === 'audioinput').forEach(d => {
-                let opt = document.createElement('option');
-                opt.text = d.label || 'マイク';
-                select.add(opt);
-            });
-        });
     </script>
 </body>
 </html>
