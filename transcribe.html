@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (ファイル表示・音量分離版)</title>
+    <title>超安定文字起こしツール (スマホ・5%刻み音量版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -229,6 +229,36 @@
             -webkit-appearance: none;
         }
 
+        #dropOverlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 123, 255, 0.15);
+            border: 4px dashed var(--primary);
+            border-radius: 8px;
+            z-index: 9999;
+            pointer-events: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #dropOverlay.active {
+            display: flex;
+        }
+
+        .drop-message {
+            background: var(--card-bg);
+            padding: 20px 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
         .controls-panel {
             display: flex;
             flex-direction: column;
@@ -275,36 +305,6 @@
         .btn-save { background-color: #17a2b8; }
         .btn-clear { background-color: var(--secondary); }
         .btn-reset { background-color: #6f42c1; font-size: 0.9rem; }
-
-        #dropOverlay {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 123, 255, 0.15);
-            border: 4px dashed var(--primary);
-            border-radius: 8px;
-            z-index: 9999;
-            pointer-events: none;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #dropOverlay.active {
-            display: flex;
-        }
-
-        .drop-message {
-            background: var(--card-bg);
-            padding: 20px 40px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--primary);
-        }
 
         @media (min-width: 600px) {
             .container {
@@ -410,7 +410,7 @@
     </div>
 
     <div class="text-panel">
-        <textarea id="resultTextarea" placeholder="「開始」ボタンを押して話すか、メディアを再生してください..." readonly></textarea>
+        <textarea id="resultTextarea" placeholder="「開始」ボタンを押して話すか、メディアを再生してください。D&D読み込み、追記にも完全対応しています..." readonly></textarea>
     </div>
 
     <div class="controls-panel">
@@ -435,6 +435,7 @@
     let restartTimer = null;
     let currentMode = 'realtime'; 
 
+    // Web Audio API 関連
     let audioCtx = null;
     let audioSource = null;
     let monitorGainNode = null;
@@ -467,19 +468,21 @@
     const dropOverlay = document.getElementById('dropOverlay');
 
     let finalizedLines = [];
-    let activeParagraph = "";
     let currentInterim = "";
-    let lastProcessedLength = 0;
 
     if (!isMobile) {
         boostRow.style.display = 'flex'; 
     }
 
+    // タブ切り替え
     tabRealtime.addEventListener('click', () => switchMode('realtime'));
     tabMedia.addEventListener('click', () => switchMode('media'));
 
     function switchMode(mode) {
-        if (isRunning) return;
+        if (isRunning) {
+            alert("稼働中はモードを切り替えられません。一度停止してください。");
+            return;
+        }
         currentMode = mode;
         if (mode === 'realtime') {
             tabRealtime.classList.add('active');
@@ -495,20 +498,29 @@
     }
 
     function loadMediaFile(file) {
-        if (!file || isRunning) return;
+        if (!file) return;
         if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')) {
-            alert("音声または動画ファイルを選択してください。");
+            alert("音声ファイルまたは動画ファイルを選択してください。");
             return;
         }
+        if (isRunning) {
+            alert("文字起こし稼働中は新しいファイルを読み込めません。一度停止してください。");
+            return;
+        }
+        
         const url = URL.createObjectURL(file);
         audioPlayer.src = url;
         audioPlayer.load();
+        
         btnClearFile.style.display = 'block';
         switchMode('media');
     }
 
     function clearSelectedFile() {
-        if (isRunning) return;
+        if (isRunning) {
+            alert("文字起こし稼働中はファイルを解除できません。一度停止してください。");
+            return;
+        }
         mediaFile.value = ''; 
         audioPlayer.src = '';  
         audioPlayer.removeAttribute('src');
@@ -518,14 +530,20 @@
     }
 
     btnClearFile.addEventListener('click', clearSelectedFile);
+
     mediaFile.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) loadMediaFile(e.target.files[0]);
-        else clearSelectedFile();
+        if (e.target.files.length > 0) {
+            loadMediaFile(e.target.files[0]);
+        } else {
+            clearSelectedFile();
+        }
     });
 
+    // 再生音量スライダー変更イベント (5%刻みに完全対応)
     monitorVolume.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         volValue.innerText = `${Math.round(val * 100)}%`;
+        
         if (monitorGainNode) {
             monitorGainNode.gain.setValueAtTime(val, audioCtx.currentTime);
         } else {
@@ -533,6 +551,7 @@
         }
     });
 
+    // ドラッグ＆ドロップ
     window.addEventListener('dragenter', (e) => {
         e.preventDefault();
         if (!isRunning) dropOverlay.classList.add('active');
@@ -542,14 +561,12 @@
         e.preventDefault();
         if (e.clientX === 0 && e.clientY === 0) dropOverlay.classList.remove('active');
     });
-    
+    dropOverlay.addEventListener('dragleave', () => { dropOverlay.classList.remove('active'); });
     window.addEventListener('drop', (e) => {
         e.preventDefault();
         dropOverlay.classList.remove('active');
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            const file = e.dataTransfer.files[0];
-            mediaFile.files = e.dataTransfer.files; 
-            loadMediaFile(file);
+            loadMediaFile(e.dataTransfer.files[0]);
         }
     });
 
@@ -558,6 +575,7 @@
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const devices = await navigator.mediaDevices.enumerateDevices();
+            
             deviceSelect.innerHTML = '<option value="">標準のマイク (デフォルト)</option>';
             devices.forEach(device => {
                 if (device.kind === 'audioinput') {
@@ -568,26 +586,26 @@
                 }
             });
             stream.getTracks().forEach(track => track.stop());
-        } catch (e) {}
-    }
-
-    function cleanInterimText(str) {
-        return str.replace(/[、。]+/g, "").trim();
-    }
-
-    function cleanEnds(str) {
-        return str.replace(/[、。\s]+$/, "").trim();
+        } catch (e) {
+            console.error("デバイス取得失敗:", e);
+        }
     }
 
     function startRecognition() {
-        if (!SpeechRecognition) return;
-        if (recognition) { try { recognition.abort(); } catch(e){} }
+        if (!SpeechRecognition) {
+            alert("お使いのブラウザは音声認識に対応していません。");
+            return;
+        }
+
+        if (recognition) {
+            try { recognition.abort(); } catch(e){}
+        }
         if (restartTimer) clearTimeout(restartTimer);
 
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
-        recognition.continuous = true; 
-        recognition.interimResults = true; 
+        recognition.continuous = false; 
+        recognition.interimResults = true;
         recognition.maxAlternatives = 1;
 
         recognition.onstart = () => {
@@ -596,58 +614,57 @@
 
         recognition.onresult = (event) => {
             let interimText = "";
-            
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const result = event.results[i];
-                let text = result[0].transcript;
+                let text = result[0].transcript.trim();
                 if (!text) continue;
 
                 if (result.isFinal) {
-                    let finalSlice = text.slice(lastProcessedLength);
-                    if (finalSlice) {
-                        activeParagraph += finalSlice;
+                    text = text.replace(/[、。]+$/, "");
+                    if (text) {
+                        const targetLine = text + "。";
+                        const isDuplicate = finalizedLines.length > 0 && 
+                            (finalizedLines[finalizedLines.length - 1] === targetLine || 
+                             finalizedLines.slice(-2).includes(targetLine));
+
+                        if (!isDuplicate) {
+                            finalizedLines.push(targetLine);
+                        }
                     }
-                    
-                    let sentenceToPush = cleanEnds(activeParagraph);
-                    if (sentenceToPush) {
-                        finalizedLines.push(sentenceToPush + "。");
-                    }
-                    
-                    activeParagraph = "";
-                    lastProcessedLength = 0;
-                    currentInterim = "";
+                    currentInterim = ""; 
                 } else {
-                    let currentChunk = text.slice(lastProcessedLength);
-                    
-                    if (currentChunk.length >= 40) {
-                        activeParagraph += currentChunk;
-                        lastProcessedLength = text.length;
-                    }
-                    
-                    interimText = text.slice(lastProcessedLength);
-                    currentInterim = interimText;
+                    interimText = text;
+                    currentInterim = text;
                 }
             }
             renderText(interimText);
         };
 
         recognition.onerror = (event) => {
+            console.warn("認識エラー:", event.error);
             if (isRunning && (event.error === 'network' || event.error === 'no-speech' || event.error === 'aborted')) {
-                updateStatus('connected', '音声の再取得中...');
+                updateStatus('connected', '再接続を試みています...');
             }
         };
 
         recognition.onend = () => {
-            let finalSentence = cleanEnds(activeParagraph + currentInterim);
-            if (finalSentence) {
-                finalizedLines.push(finalSentence + "。");
+            if (currentInterim) {
+                let text = currentInterim.replace(/[、。]+$/, "").trim();
+                if (text) {
+                    const targetLine = text + "。";
+                    if (!finalizedLines.slice(-2).includes(targetLine)) {
+                        finalizedLines.push(targetLine);
+                    }
+                }
+                currentInterim = "";
             }
-            
-            activeParagraph = "";
-            currentInterim = "";
-            lastProcessedLength = 0;
 
             if (isRunning) {
+                if (currentMode === 'media' && (audioPlayer.paused || audioPlayer.ended)) {
+                    stopProcess();
+                    return;
+                }
+
                 renderText("");
                 const delay = Math.max(400, parseInt(sensitivitySelect.value, 10));
                 restartTimer = setTimeout(() => {
@@ -665,18 +682,18 @@
         try {
             recognition.start();
         } catch(e) {
-            if (isRunning) restartTimer = setTimeout(() => startRecognition(), 1000);
+            console.error("開始失敗:", e);
+            if (isRunning) {
+                restartTimer = setTimeout(() => startRecognition(), 1000);
+            }
         }
     }
 
     function renderText(interimText) {
         let currentDisplay = finalizedLines.join("\n");
-        let temporaryLine = activeParagraph + cleanInterimText(interimText);
-        
-        if (temporaryLine) {
-            currentDisplay += (currentDisplay ? "\n" : "") + temporaryLine;
+        if (interimText) {
+            currentDisplay += (currentDisplay ? "\n" : "") + interimText;
         }
-        
         resultTextarea.value = currentDisplay;
         autoScroll();
     }
@@ -704,33 +721,31 @@
 
     btnStart.addEventListener('click', async () => {
         if (currentMode === 'media' && !audioPlayer.src) {
-            alert("ファイルを選択してください。");
+            alert("メディアファイルを選択するか、ドラッグ＆ドロップしてください。");
             return;
         }
 
         isRunning = true;
         btnStart.disabled = true;
         btnStop.disabled = false;
-        
-        // 💡 【修正点】過去のデータを全クリア（finalizedLines = []）する処理を削除し、
-        // 続きからテキストを追加できるように変更しました。
-        activeParagraph = "";
         currentInterim = "";
-        lastProcessedLength = 0;
 
         if (currentMode === 'media') {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
                 if (!isMobile) {
                     audioSource = audioCtx.createMediaElementSource(audioPlayer);
                     monitorGainNode = audioCtx.createGain();
-                    
                     monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
                     audioSource.connect(monitorGainNode);
                     monitorGainNode.connect(audioCtx.destination);
                 }
             }
-            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
             audioPlayer.play();
         }
 
@@ -741,9 +756,14 @@
     function stopProcess() {
         isRunning = false;
         if (restartTimer) clearTimeout(restartTimer);
-        if (recognition) { try { recognition.stop(); } catch(e){} }
+        if (recognition) {
+            try { recognition.stop(); } catch(e){}
+        }
         releaseWakeLock();
-        if (currentMode === 'media') audioPlayer.pause();
+        
+        if (currentMode === 'media') {
+            audioPlayer.pause();
+        }
 
         updateStatus('connected', '待機中');
         btnStart.disabled = false;
@@ -755,8 +775,8 @@
     btnCopy.addEventListener('click', () => {
         if (!resultTextarea.value) return;
         navigator.clipboard.writeText(resultTextarea.value)
-            .then(() => alert("コピーしました"))
-            .catch(err => console.error(err));
+            .then(() => alert("クリップボードにコピーしました"))
+            .catch(err => console.error("コピー失敗:", err));
     });
 
     btnSave.addEventListener('click', () => {
@@ -773,19 +793,21 @@
     });
 
     btnClear.addEventListener('click', () => {
-        if (confirm("テキストを消去しますか？")) {
+        if (confirm("表示されているテキストを消去しますか？")) {
             finalizedLines = [];
-            activeParagraph = "";
             currentInterim = "";
-            lastProcessedLength = 0;
             resultTextarea.value = "";
         }
     });
 
-    btnReset.addEventListener('click', initDevices);
-    
+    btnReset.addEventListener('click', () => {
+        initDevices();
+    });
+
     audioPlayer.addEventListener('ended', () => {
-        if (isRunning && currentMode === 'media') stopProcess();
+        if (isRunning && currentMode === 'media') {
+            stopProcess();
+        }
     });
 
     window.addEventListener('resize', autoScroll);
