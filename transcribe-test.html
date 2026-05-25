@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>現場向け多機能文字起こし</title>
+    <title>現場向け音声文字起こし【安定版】</title>
     <style>
         :root { --primary: #2e7d32; --danger: #c62828; --bg: #f5f5f5; --border: #ccc; }
         body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 10px; height: 100dvh; display: flex; flex-direction: column; }
@@ -53,17 +53,20 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, audioCtx, gainNode, stream, isRunning = false;
     const textarea = document.getElementById('resultTextarea');
+    const statusLabel = document.getElementById('statusLabel');
 
     async function initDevices() {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const select = document.getElementById('deviceSelect');
-        devices.forEach(d => {
-            if(d.kind === 'audioinput') {
-                let opt = document.createElement('option');
-                opt.value = d.deviceId; opt.text = d.label || 'マイク';
-                select.appendChild(opt);
-            }
-        });
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const select = document.getElementById('deviceSelect');
+            devices.forEach(d => {
+                if(d.kind === 'audioinput') {
+                    let opt = document.createElement('option');
+                    opt.value = d.deviceId; opt.text = d.label || 'マイク';
+                    select.appendChild(opt);
+                }
+            });
+        } catch(e) {}
     }
 
     async function setupAudio() {
@@ -79,18 +82,18 @@
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
-        recognition.interimResults = true;
+        recognition.interimResults = false; // 確定のみを表示して「。」の連続を防止
 
         recognition.onresult = (e) => {
-            let final = "";
-            for (let i = e.resultIndex; i < e.results.length; ++i) {
-                if (e.results[i].isFinal) final += e.results[i][0].transcript + "。\n";
+            let final = e.results[e.results.length-1][0].transcript.trim();
+            if (final && final !== "。") {
+                textarea.value += (textarea.value ? "\n" : "") + final + "。";
+                textarea.scrollTop = textarea.scrollHeight;
             }
-            textarea.value += final;
-            textarea.scrollTop = textarea.scrollHeight;
         };
 
-        recognition.onend = () => { if (isRunning) recognition.start(); };
+        recognition.onstart = () => statusLabel.innerText = "認識中...";
+        recognition.onend = () => { if (isRunning) recognition.start(); else statusLabel.innerText = "待機中"; };
     }
 
     document.getElementById('btnStart').onclick = async () => {
@@ -100,7 +103,6 @@
         recognition.start();
         document.getElementById('btnStart').disabled = true;
         document.getElementById('btnStop').disabled = false;
-        document.getElementById('statusLabel').innerText = "録音中...";
     };
 
     document.getElementById('btnStop').onclick = () => {
@@ -110,7 +112,6 @@
         if(audioCtx) audioCtx.close();
         document.getElementById('btnStart').disabled = false;
         document.getElementById('btnStop').disabled = true;
-        document.getElementById('statusLabel').innerText = "待機中";
     };
 
     function copyText() { navigator.clipboard.writeText(textarea.value); }
