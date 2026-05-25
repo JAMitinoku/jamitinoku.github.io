@@ -44,7 +44,7 @@
         rec.interimResults = true;
         rec.lang = 'ja-JP';
 
-        // デバイス読み込み
+        // デバイス読み込み（UI変更なし）
         navigator.mediaDevices.enumerateDevices().then(devices => {
             const select = document.getElementById('device-select');
             devices.filter(d => d.kind === 'audioinput').forEach(d => {
@@ -55,7 +55,7 @@
             });
         });
 
-        // 認識結果の表示（シンプルな連結のみ）
+        // ロジック：改行を強制するシンプルな構造
         rec.onresult = (e) => {
             let final = "";
             let interim = "";
@@ -66,9 +66,10 @@
                     interim += e.results[i][0].transcript;
                 }
             }
-            if (final) {
-                document.getElementById('final-text').innerText += final;
-                document.getElementById('final-text').scrollTop = document.getElementById('final-text').scrollHeight;
+            if (final !== "") {
+                const finalDiv = document.getElementById('final-text');
+                finalDiv.innerText += final;
+                finalDiv.scrollTop = finalDiv.scrollHeight;
             }
             document.getElementById('interim-text').innerText = interim;
         };
