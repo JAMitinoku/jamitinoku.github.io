@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文字起こしツール（ダブリ防止版）</title>
+    <title>文字起こしツール</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
         body, html { height: 100dvh; background-color: var(--bg-color); overflow: hidden; }
         .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
-        .info-bar { font-size: 0.8rem; background: #e9ecef; padding: 8px 10px; border-radius: 4px; color: #495057; display: flex; flex-direction: column; gap: 8px; }
-        .config-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        select { flex: 1; padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); font-size: 0.8rem; }
+        .info-bar { font-size: 0.8rem; background: #e9ecef; padding: 5px 10px; border-radius: 4px; color: #495057; display: flex; justify-content: space-between; }
         .header { display: flex; gap: 10px; align-items: center; }
-        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; transition: background 0.3s; }
+        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
         #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .sub-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
@@ -26,23 +24,12 @@
 <body>
     <div class="container">
         <div class="info-bar">
-            <div class="config-row">
-                <span>入力:</span>
-                <select id="deviceSelect"><option>取得中...</option></select>
-            </div>
-            <div class="config-row">
-                <span>感度:</span>
-                <select id="gainSelect">
-                    <option value="1">標準</option>
-                    <option value="2">高感度</option>
-                    <option value="3">最大</option>
-                </select>
-            </div>
+            <span id="deviceName">入力: 取得中...</span>
         </div>
         <div class="header">
             <div id="statusBadge" class="status-badge">待機中</div>
         </div>
-        <textarea id="resultTextarea" readonly placeholder="認識結果..."></textarea>
+        <textarea id="resultTextarea" readonly placeholder="ここに文字起こしが表示されます..."></textarea>
         <div class="controls">
             <button id="btnStart" class="btn-start">開始</button>
             <button id="btnStop" class="btn-stop" disabled>停止</button>
@@ -57,79 +44,49 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
-    let finalizedLog = []; // 確定済みテキストのリスト
-    let processedCount = 0; // 処理済みセグメント数
     let isUserStopping = false;
-    const maxDisplayLines = 15;
 
-    // デバイス取得などの初期化ロジックは省略（以前の通り）
-    async function refreshDeviceList() {
+    async function updateDeviceName() {
         try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioDevices = devices.filter(d => d.kind === 'audioinput');
-            const select = document.getElementById('deviceSelect');
-            select.innerHTML = '';
-            audioDevices.forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d.deviceId;
-                opt.text = d.label || `マイク ${select.length + 1}`;
-                select.appendChild(opt);
-            });
-        } catch (e) { document.getElementById('deviceSelect').innerHTML = '<option>取得不可</option>'; }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            document.getElementById('deviceName').innerText = "入力: " + stream.getAudioTracks()[0].label;
+            stream.getTracks().forEach(t => t.stop());
+        } catch (e) { document.getElementById('deviceName').innerText = "入力: 取得不可"; }
     }
-
-    function updateDisplay(interimText) {
-        const displayLog = finalizedLog.slice(-maxDisplayLines);
-        let text = displayLog.join("\n");
-        if (finalizedLog.length > maxDisplayLines) text = "…\n" + text;
-        
-        document.getElementById('resultTextarea').value = text + (interimText ? (text ? "\n" : "") + interimText : "");
-        document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
-    }
+    updateDeviceName();
 
     function initRecognition() {
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
-        
-        // 認識開始時にインデックスをリセット
-        processedCount = 0;
-        
+
         recognition.onresult = (e) => {
             let interimText = "";
-            
-            // 今回受け取った全結果をループする
-            for (let i = 0; i < e.results.length; i++) {
-                // まだ処理していない結果のみを抽出（i >= processedCount）
-                if (i >= processedCount) {
-                    if (e.results[i].isFinal) {
-                        const transcript = e.results[i][0].transcript.trim();
-                        if (transcript.length > 0) {
-                            finalizedLog.push(transcript + "。");
-                            processedCount++; // 処理済みとしてカウントアップ
-                        }
-                    } else {
-                        interimText = e.results[i][0].transcript.trim();
+            // 今回の認識で新しく確定した結果のみをループ処理する
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) {
+                    let text = e.results[i][0].transcript.trim();
+                    if (text) {
+                        if (!/[。！？]$/.test(text)) text += "。";
+                        // 直接textareaに追記することでダブリを回避
+                        document.getElementById('resultTextarea').value += text + "\n";
                     }
+                } else {
+                    interimText = e.results[i][0].transcript.trim();
                 }
             }
-            updateDisplay(interimText);
+            // 編集中テキストの表示制御（簡易版）
+            const area = document.getElementById('resultTextarea');
+            area.scrollTop = area.scrollHeight;
         };
 
-        recognition.onstart = () => {
-            document.getElementById('statusBadge').innerText = "認識中";
-            document.getElementById('statusBadge').style.background = "#d4edda";
-        };
-
+        recognition.onstart = () => { document.getElementById('statusBadge').innerText = "認識中"; };
         recognition.onend = () => {
             if (!isUserStopping) {
-                // ループ再起動
-                try { recognition.start(); } catch(e) {}
+                try { recognition.start(); } catch (e) {}
             } else {
                 document.getElementById('statusBadge').innerText = "待機中";
-                document.getElementById('statusBadge').style.background = "#e9ecef";
             }
         };
     }
@@ -144,20 +101,16 @@
 
     document.getElementById('btnStop').onclick = () => {
         isUserStopping = true;
-        if(recognition) recognition.stop();
+        recognition.stop();
         document.getElementById('btnStart').disabled = false;
         document.getElementById('btnStop').disabled = true;
     };
 
-    document.getElementById('btnClear').onclick = () => { 
-        finalizedLog = []; 
-        processedCount = 0;
-        updateDisplay(); 
+    document.getElementById('btnClear').onclick = () => { document.getElementById('resultTextarea').value = ""; };
+    document.getElementById('btnCopy').onclick = () => { 
+        navigator.clipboard.writeText(document.getElementById('resultTextarea').value);
+        alert("コピーしました"); 
     };
-    
-    document.getElementById('btnCopy').onclick = () => { navigator.clipboard.writeText(finalizedLog.join("\n")); alert("コピーしました"); };
-
-    refreshDeviceList();
 </script>
 </body>
 </html>
