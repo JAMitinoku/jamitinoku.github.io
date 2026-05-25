@@ -508,6 +508,11 @@
             return;
         }
         
+        // ★DataTransferを使用してドロップされたファイルをinputに同期する
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        mediaFile.files = dataTransfer.files;
+        
         const url = URL.createObjectURL(file);
         audioPlayer.src = url;
         audioPlayer.load();
