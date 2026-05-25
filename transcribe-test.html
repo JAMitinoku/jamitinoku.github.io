@@ -43,8 +43,8 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, isRunning = false;
-    let finalizedLog = [];
-    let lastRenderedText = "";
+    let finalizedLog = []; // 確定文を隔離・保護する配列
+    let lastRenderedText = ""; // 描画負荷軽減用キャッシュ
 
     const textarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
@@ -57,32 +57,30 @@
 
         recognition.onresult = (e) => {
             let interimText = "";
-            let newFinals = [];
+            let hasNewFinal = false;
 
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
-                    // 句点付与ロジック
-                    if (text && !/[。！？]$/.test(text)) {
-                        text += "。";
-                    }
-                    // Chrome重複回避ロジック
+                    // 句読点補完
+                    if (text && !/[。！？]$/.test(text)) text += "。";
+                    
+                    // Chrome重複回避と追加
                     if (text && finalizedLog[finalizedLog.length - 1] !== text) {
-                        newFinals.push(text);
+                        finalizedLog.push(text);
+                        hasNewFinal = true;
                     }
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
 
-            newFinals.forEach(text => {
-                finalizedLog.push(text);
-            });
-
+            // フリーズ回避：変化時のみDOM更新
             const currentDisplay = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
             if (currentDisplay !== lastRenderedText) {
                 textarea.value = currentDisplay;
-                textarea.scrollTop = textarea.scrollHeight;
+                // スクロール処理の頻度抑制
+                if (hasNewFinal) textarea.scrollTop = textarea.scrollHeight;
                 lastRenderedText = currentDisplay;
             }
         };
@@ -109,7 +107,9 @@
     };
 
     document.getElementById('btnClear').onclick = () => {
-        if(confirm("消去しますか？")) { finalizedLog = []; lastRenderedText = ""; textarea.value = ""; }
+        if(confirm("消去しますか？")) { 
+            finalizedLog = []; lastRenderedText = ""; textarea.value = ""; 
+        }
     };
 
     document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
