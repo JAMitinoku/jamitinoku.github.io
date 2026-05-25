@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>現場向け音声文字起こし【決定版】</title>
+    <title>現場向け音声文字起こし【修正版】</title>
     <style>
         :root { --primary: #2e7d32; --danger: #c62828; --bg: #f5f5f5; --border: #ccc; }
         body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 10px; height: 100dvh; display: flex; flex-direction: column; }
@@ -52,7 +52,7 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, audioCtx, gainNode, stream, isRunning = false;
-    let finalizedText = "";
+    let finalizedLines = [];
     const textarea = document.getElementById('resultTextarea');
     const statusLabel = document.getElementById('statusLabel');
 
@@ -83,21 +83,21 @@
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
-        recognition.interimResults = true; // 未確定結果を取得
+        recognition.interimResults = true;
 
         recognition.onresult = (e) => {
-            let final = "";
             let interim = "";
             for (let i = e.resultIndex; i < e.results.length; ++i) {
+                let text = e.results[i][0].transcript.trim();
                 if (e.results[i].isFinal) {
-                    let text = e.results[i][0].transcript.trim();
-                    if (text && text !== "。") final += text + "。\n";
+                    if (text && text !== "。" && text !== finalizedLines[finalizedLines.length - 1]) {
+                        finalizedLines.push(text + "。");
+                    }
                 } else {
-                    interim += e.results[i][0].transcript;
+                    interim = text;
                 }
             }
-            if (final) finalizedText += final;
-            textarea.value = finalizedText + interim;
+            textarea.value = finalizedLines.join("\n") + (interim ? "\n" + interim : "");
             textarea.scrollTop = textarea.scrollHeight;
         };
 
@@ -125,7 +125,7 @@
     };
 
     function copyText() { navigator.clipboard.writeText(textarea.value); }
-    function clearText() { if(confirm("消去しますか？")) { finalizedText = ""; textarea.value = ""; } }
+    function clearText() { if(confirm("消去しますか？")) { finalizedLines = []; textarea.value = ""; } }
     function saveText() {
         const blob = new Blob([textarea.value], {type: "text/plain"});
         const a = document.createElement("a");
