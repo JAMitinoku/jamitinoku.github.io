@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高精度文字起こしツール</title>
+    <title>高精度・素直な文字起こしツール</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; gap: 8px; background: #f4f4f9; }
         .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
@@ -12,7 +12,6 @@
         #interim-text { font-size: 1em; color: #888; border-top: 1px dashed #ccc; min-height: 40px; margin-top: 5px; font-style: italic; }
         .info-bar { font-size: 0.8em; color: #555; padding: 5px; }
         button { padding: 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
-        button:disabled { background: #eee; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -39,6 +38,8 @@
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
+        // マキシマム・レスポンス設定：予測を控えめにし、生の音声を優先
+        recognition.maxAlternatives = 1;
 
         // デバイス初期化
         navigator.mediaDevices.enumerateDevices().then(devices => {
@@ -51,7 +52,6 @@
             });
         });
 
-        // 感度調整用オーディオ設定
         async function setupAudio() {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: document.getElementById('device-select').value || undefined } });
             audioCtx = new AudioContext();
@@ -63,19 +63,19 @@
 
         document.getElementById('sensitivity').oninput = (e) => { if (gainNode) gainNode.gain.value = e.target.value; };
 
-        // 認識ロジック
+        // 認識ロジック：加工を減らし、聞いたままを表示
         recognition.onresult = (event) => {
             let final = '';
             let interim = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
+                let text = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    let text = event.results[i][0].transcript.trim();
-                    if (text && !/^[\s .。！？]+$/.test(text)) {
-                        if (!/[。！？]$/.test(text)) text += '。';
+                    // 加工を最小限に。空行や記号のみは除外するが、文字はそのまま出す
+                    if (text.trim().length > 0) {
                         final += text + '\n';
                     }
                 } else {
-                    interim += event.results[i][0].transcript;
+                    interim += text;
                 }
             }
             if (final) {
@@ -96,14 +96,12 @@
             recognition.start();
             document.getElementById('start-btn').disabled = true;
             document.getElementById('stop-btn').disabled = false;
-            document.getElementById('status').innerText = "状態: 認識中...";
         };
 
         document.getElementById('stop-btn').onclick = () => {
             recognition.stop();
             document.getElementById('start-btn').disabled = false;
             document.getElementById('stop-btn').disabled = true;
-            document.getElementById('status').innerText = "状態: 停止";
         };
 
         document.getElementById('clear-btn').onclick = () => { document.getElementById('final-text').innerText = ''; document.getElementById('interim-text').innerText = ''; };
@@ -112,7 +110,7 @@
             const blob = new Blob([document.getElementById('final-text').innerText], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'transcript.txt';
+            a.download = 'log.txt';
             a.click();
         };
         document.getElementById('reset-btn').onclick = () => location.reload();
