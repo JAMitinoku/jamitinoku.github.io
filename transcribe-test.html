@@ -2,7 +2,6 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文字起こしツール</title>
     <style>
         :root { --primary-bg: #f0f2f5; --panel-bg: #ffffff; --border-color: #ccd6dd; }
@@ -43,7 +42,6 @@
         rec.continuous = true;
         rec.interimResults = true;
         rec.lang = 'ja-JP';
-        rec.maxAlternatives = 1;
 
         let audioCtx, gainNode;
 
@@ -68,11 +66,11 @@
             source.connect(gainNode);
         }
 
+        // ロジック：余計な補完を排除し、受信したテキストをそのまま蓄積
         rec.onresult = (e) => {
             let final = "";
             let interim = "";
             for (let i = e.resultIndex; i < e.results.length; i++) {
-                // 生のトランスクリプトを一切加工せず取得
                 if (e.results[i].isFinal) {
                     final += e.results[i][0].transcript;
                 } else {
@@ -89,7 +87,7 @@
         rec.onend = () => {
             if (!document.getElementById('stop-btn').disabled) {
                 document.getElementById('status').innerText = "状態: 自動再接続中...";
-                setTimeout(() => rec.start(), 200);
+                setTimeout(() => rec.start(), 100);
             }
         };
 
