@@ -6,24 +6,27 @@
     <title>超安定リアルタイム文字起こしツール</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --primary: #007bff; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
-        body, html { height: 100dvh; background-color: var(--bg-color); }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body, html { height: 100%; height: 100dvh; background-color: var(--bg-color); color: var(--text-color); overflow: hidden; }
         .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
-        .status-header { background: var(--card-bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        #resultTextarea { flex: 1; width: 100%; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 16px; resize: none; background: #fff; }
+        .header { display: flex; gap: 10px; align-items: center; }
+        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
+        #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .sub-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
         button { padding: 12px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
-        .btn-start { background: var(--success); }
-        .btn-stop { background: var(--danger); }
-        .btn-sub { background: var(--secondary); font-size: 0.9rem; }
+        .btn-start { background-color: var(--success); }
+        .btn-stop { background-color: var(--danger); }
+        .btn-sub { background-color: var(--secondary); font-size: 0.9rem; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="status-header">
-            <span id="statusText">待機中</span>
-            <select id="boostSelect"><option value="1.0">等倍</option><option value="1.5">1.5倍</option><option value="2.0">2.0倍</option></select>
+        <div class="header">
+            <div id="statusBadge" class="status-badge">待機中</div>
+            <select id="boostSelect" style="padding:5px">
+                <option value="1.0">等倍</option><option value="1.5">1.5倍</option><option value="2.0">2.0倍</option>
+            </select>
         </div>
         <textarea id="resultTextarea" readonly></textarea>
         <div class="controls">
@@ -39,12 +42,12 @@
 
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
-    let isRunning = false;
-    let finalizedLog = []; // 確定文を強固に守るためのログ配列
+    let recognition, isRunning = false;
+    let finalizedLog = []; // 確定文を強固に保持するログ
+    let lastRenderedText = ""; // 高速描画用キャッシュ
 
-    const textarea = document.getElementById('resultTextarea');
-    const statusText = document.getElementById('statusText');
+    const resultTextarea = document.getElementById('resultTextarea');
+    const statusBadge = document.getElementById('statusBadge');
 
     function initRecognition() {
         recognition = new SpeechRecognition();
@@ -56,7 +59,7 @@
             let interimText = "";
             let newFinals = [];
 
-            // すべての履歴を再走査し、確定文と未確定文を抽出
+            // すべての履歴を走査し、確定分のみを抽出
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let transcript = e.results[i][0].transcript.trim();
@@ -73,15 +76,19 @@
                 }
             });
 
-            // 表示更新：配列内の確定文 ＋ 現在の未確定文
-            textarea.value = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
-            textarea.scrollTop = textarea.scrollHeight;
+            // 描画最適化：テキストが変わった時のみDOM更新を行い遅延を排除
+            const currentDisplay = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
+            if (currentDisplay !== lastRenderedText) {
+                resultTextarea.value = currentDisplay;
+                resultTextarea.scrollTop = resultTextarea.scrollHeight;
+                lastRenderedText = currentDisplay;
+            }
         };
 
-        recognition.onstart = () => { isRunning = true; statusText.innerText = "認識中..."; };
-        recognition.onend = () => {
-            if (isRunning) recognition.start();
-            else statusText.innerText = "待機中";
+        recognition.onstart = () => { isRunning = true; statusBadge.innerText = "認識中..."; statusBadge.style.background = "#d4edda"; };
+        recognition.onend = () => { 
+            if (isRunning) recognition.start(); 
+            else { statusBadge.innerText = "待機中"; statusBadge.style.background = "#e9ecef"; }
         };
     }
 
@@ -100,12 +107,16 @@
     };
 
     document.getElementById('btnClear').onclick = () => {
-        if(confirm("消去しますか？")) { finalizedLog = []; textarea.value = ""; }
+        if(confirm("消去しますか？")) { 
+            finalizedLog = []; 
+            lastRenderedText = ""; 
+            resultTextarea.value = ""; 
+        }
     };
 
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
+    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(resultTextarea.value);
     document.getElementById('btnSave').onclick = () => {
-        const blob = new Blob([textarea.value], {type: "text/plain"});
+        const blob = new Blob([resultTextarea.value], {type: "text/plain"});
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = "記録_" + new Date().getTime() + ".txt";
