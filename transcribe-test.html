@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文字起こしツール</title>
+    <title>文字起こしツール（デバイス表示機能付き）</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -49,42 +49,40 @@
     async function updateDeviceName() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            document.getElementById('deviceName').innerText = "入力: " + stream.getAudioTracks()[0].label;
+            const track = stream.getAudioTracks()[0];
+            document.getElementById('deviceName').innerText = "入力: " + track.label;
             stream.getTracks().forEach(t => t.stop());
-        } catch (e) { document.getElementById('deviceName').innerText = "入力: 取得不可"; }
+        } catch (e) {
+            document.getElementById('deviceName').innerText = "入力: 取得不可";
+        }
     }
     updateDeviceName();
 
     function initRecognition() {
+        if (recognition) { recognition.stop(); }
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
 
         recognition.onresult = (e) => {
-            let interimText = "";
-            // 今回の認識で新しく確定した結果のみをループ処理する
+            // 前回の履歴配列管理をやめ、新しく確定したテキストのみを追記する
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
                     if (text) {
                         if (!/[。！？]$/.test(text)) text += "。";
-                        // 直接textareaに追記することでダブリを回避
                         document.getElementById('resultTextarea').value += text + "\n";
                     }
-                } else {
-                    interimText = e.results[i][0].transcript.trim();
                 }
             }
-            // 編集中テキストの表示制御（簡易版）
-            const area = document.getElementById('resultTextarea');
-            area.scrollTop = area.scrollHeight;
+            document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
         };
 
         recognition.onstart = () => { document.getElementById('statusBadge').innerText = "認識中"; };
         recognition.onend = () => {
             if (!isUserStopping) {
-                try { recognition.start(); } catch (e) {}
+                try { recognition.start(); } catch(e) {}
             } else {
                 document.getElementById('statusBadge').innerText = "待機中";
             }
