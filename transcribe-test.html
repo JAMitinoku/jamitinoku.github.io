@@ -4,47 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>高精度音声認識ツール</title>
-    
     <style>
-        body { 
-            font-family: sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            height: 100vh; 
-            margin: 0; 
-            padding: 15px; 
-            box-sizing: border-box; 
-            gap: 10px;
-        }
-
-        .controls { 
-            display: flex; 
-            flex-wrap: wrap; 
-            gap: 10px; 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border: 1px solid #ddd;
-        }
-
-        .area { 
-            flex-grow: 1; 
-            overflow-y: auto; 
-            border: 1px solid #ccc; 
-            padding: 15px; 
-            border-radius: 5px;
-            line-height: 1.6;
-            background: #fff;
-        }
-
-        #final-text { color: #222; font-size: 1.1em; }
-        #interim-text { color: #777; font-style: italic; border-top: 1px dashed #ccc; }
-
-        .info-bar { 
-            font-size: 0.9em; 
-            color: #555; 
-            padding: 5px; 
-        }
+        body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; box-sizing: border-box; gap: 10px; background: #f4f4f9; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; box-shadow: inset 0 1px 3px rgba(0,0,0,0.05); }
+        #final-text { font-size: 1.1em; line-height: 1.8; color: #333; min-height: 100px; }
+        #interim-text { font-size: 1em; color: #999; font-style: italic; min-height: 30px; border-top: 2px solid #eee; margin-top: 5px; }
+        .info-bar { font-size: 0.85em; color: #666; background: #e9ecef; padding: 5px 10px; border-radius: 4px; }
+        button { padding: 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        button:active { background: #e0e0e0; }
+        select, input { padding: 5px; }
     </style>
 </head>
 <body>
@@ -55,23 +24,17 @@
         <button id="copy-btn">コピー</button>
         <button id="save-btn">保存</button>
         <button id="clear-btn">クリア</button>
-        
         <select id="device-select"><option>デバイス読み込み中...</option></select>
-        
-        <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100" style="width: 40px;"></label>
-        <label>ブースト: <input type="range" id="boost" min="1" max="20" value="1"></label>
-        
-        <button id="reset-btn">デバイスリセット</button>
+        <label>感度: <input type="number" id="sensitivity" value="50" min="1" max="100" style="width:40px"></label>
+        <button id="reset-btn">リセット</button>
     </div>
 
     <div id="final-text" class="area"></div>
     <div id="interim-text" class="area"></div>
-
     <div id="status" class="info-bar">状態: 準備完了</div>
 
     <script>
         const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
@@ -83,64 +46,60 @@
         recognition.onresult = (event) => {
             let interim = '';
             let final = '';
-
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    // 確定テキストには句点をつけて改行で区切る
-                    final += event.results[i][0].transcript + '。\n';
+                    let text = event.results[i][0].transcript.trim();
+                    if (!text.endsWith('。') && !text.endsWith('？') && !text.endsWith('！')) text += '。';
+                    final += text + '\n';
                 } else {
                     interim += event.results[i][0].transcript;
                 }
             }
-            
-            finalDiv.innerText += final;
+            if (final) {
+                // 重複防止：末尾が句点で終わっている場合に「。」を二重挿入しない
+                if (finalDiv.innerText.endsWith('。\n') && final.startsWith('。')) {
+                    finalDiv.innerText += final.slice(1);
+                } else {
+                    finalDiv.innerText += final;
+                }
+                finalDiv.scrollTop = finalDiv.scrollHeight;
+            }
             interimDiv.innerText = interim;
         };
 
         recognition.onend = () => {
-            status.innerText = "状態: 自動復旧中...";
-            setTimeout(() => {
-                try {
-                    recognition.start();
-                } catch (e) {
-                    status.innerText = "状態: 再開待ち...";
-                }
-            }, 500);
+            if (!document.getElementById('stop-btn').disabled) {
+                status.innerText = "状態: 再接続中...";
+                setTimeout(() => recognition.start(), 500);
+            }
         };
 
         document.getElementById('start-btn').onclick = () => {
             recognition.start();
             document.getElementById('start-btn').disabled = true;
             document.getElementById('stop-btn').disabled = false;
-            status.innerText = "状態: 認識中";
+            status.innerText = "状態: 録音中...";
         };
 
         document.getElementById('stop-btn').onclick = () => {
             recognition.stop();
             document.getElementById('start-btn').disabled = false;
             document.getElementById('stop-btn').disabled = true;
-            status.innerText = "状態: 停止";
+            status.innerText = "状態: 停止中";
         };
 
-        document.getElementById('clear-btn').onclick = () => {
-            finalDiv.innerText = '';
-            interimDiv.innerText = '';
-        };
-
-        document.getElementById('copy-btn').onclick = () => {
-            navigator.clipboard.writeText(finalDiv.innerText);
-        };
-
+        document.getElementById('clear-btn').onclick = () => { finalDiv.innerText = ''; interimDiv.innerText = ''; };
+        document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(finalDiv.innerText);
+        document.getElementById('reset-btn').onclick = () => location.reload();
+        
         document.getElementById('save-btn').onclick = () => {
             const blob = new Blob([finalDiv.innerText], {type: 'text/plain'});
-            const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = 'log.txt';
+            a.href = URL.createObjectURL(blob);
+            a.download = 'memo_' + new Date().getTime() + '.txt';
             a.click();
         };
 
-        // マイクデバイス列挙処理
         navigator.mediaDevices.enumerateDevices().then(devices => {
             const select = document.getElementById('device-select');
             select.innerHTML = '';
