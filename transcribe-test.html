@@ -81,28 +81,30 @@
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
-        
+
+        let lastInterim = "";
+
         recognition.onresult = (e) => {
             const area = document.getElementById('resultTextarea');
-            let lines = area.value.split('\n');
-            let lastConfirmed = lines.length > 0 ? lines[lines.length - 2] : ""; // 最後に確定した行
-            
+            let content = area.value;
+
             for (let i = e.resultIndex; i < e.results.length; i++) {
+                let transcript = e.results[i][0].transcript.trim();
+
                 if (e.results[i].isFinal) {
-                    let text = e.results[i][0].transcript.trim();
-                    // 直前の行と完全に一致する場合は無視する（ダブリ防止）
-                    if (text && text !== lastConfirmed) {
-                        if (!/[。！？]$/.test(text)) text += "。";
-                        area.value = area.value.replace(/\n[^ \n]+$/, "") + "\n" + text + "\n";
-                        lastConfirmed = text;
+                    // 「直前まで表示していた編集中テキスト」と今回確定したテキストが重複していたら削除
+                    if (content.endsWith(lastInterim)) {
+                        content = content.slice(0, -lastInterim.length).trim();
                     }
+                    if (!/[。！？]$/.test(transcript)) transcript += "。";
+                    content += (content ? "\n" : "") + transcript + "\n";
+                    lastInterim = "";
                 } else {
-                    let interimText = e.results[i][0].transcript.trim();
-                    let currentVal = area.value.split('\n');
-                    currentVal[currentVal.length - 1] = interimText;
-                    area.value = currentVal.join('\n');
+                    // 現在編集中の中間テキストを一時保持
+                    lastInterim = transcript;
                 }
             }
+            area.value = content + (lastInterim ? "\n" + lastInterim : "");
             area.scrollTop = area.scrollHeight;
         };
 
