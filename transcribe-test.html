@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文字起こしツール（自動再起動対応）</title>
+    <title>文字起こしツール</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -58,7 +58,7 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let finalizedLog = [];
-    let isUserStopping = false; // ユーザーが明示的に停止したか管理するフラグ
+    let isUserStopping = false;
     const maxDisplayLines = 15;
 
     async function refreshDeviceList() {
@@ -78,10 +78,12 @@
     }
 
     function updateDisplay(interimText) {
-        const displayLog = finalizedLog.slice(-maxDisplayLines);
+        const displayLog = finalizedLog.filter(line => line.length > 0).slice(-maxDisplayLines);
         let text = displayLog.join("\n");
         if (finalizedLog.length > maxDisplayLines) text = "…\n" + text;
-        document.getElementById('resultTextarea').value = text + (interimText ? "\n" + interimText : "");
+        
+        const finalOutput = text ? (interimText ? text + "\n" + interimText : text) : (interimText || "");
+        document.getElementById('resultTextarea').value = finalOutput;
         document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
     }
 
@@ -93,13 +95,17 @@
         
         recognition.onresult = (e) => {
             let interimText = "";
-            for (let i = 0; i < e.results.length; i++) {
+            // 今回の確定結果のみを厳密に抽出
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                const transcript = e.results[i][0].transcript.trim();
                 if (e.results[i].isFinal) {
-                    let text = e.results[i][0].transcript.trim();
-                    if (text && !/[。！？]$/.test(text)) text += "。";
-                    finalizedLog.push(text);
+                    if (transcript.length > 0) {
+                        let text = transcript;
+                        if (!/[。！？]$/.test(text)) text += "。";
+                        finalizedLog.push(text);
+                    }
                 } else {
-                    interimText = e.results[i][0].transcript.trim();
+                    interimText = transcript;
                 }
             }
             updateDisplay(interimText);
@@ -110,19 +116,13 @@
             document.getElementById('statusBadge').style.background = "#d4edda";
         };
 
-        // 【ここがループの心臓部】
         recognition.onend = () => {
             if (!isUserStopping) {
-                // 停止ボタンを押していない場合は自動で再起動
-                try { recognition.start(); } catch(e) { console.log("再起動待機..."); }
+                try { recognition.start(); } catch(e) {}
             } else {
                 document.getElementById('statusBadge').innerText = "待機中";
                 document.getElementById('statusBadge').style.background = "#e9ecef";
             }
-        };
-
-        recognition.onerror = (e) => {
-            console.log("エラー:", e.error);
         };
     }
 
@@ -135,7 +135,7 @@
     };
 
     document.getElementById('btnStop').onclick = () => {
-        isUserStopping = true; // ループを止めるフラグを立てる
+        isUserStopping = true;
         if(recognition) recognition.stop();
         document.getElementById('btnStart').disabled = false;
         document.getElementById('btnStop').disabled = true;
