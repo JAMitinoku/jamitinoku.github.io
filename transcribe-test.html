@@ -57,7 +57,8 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
-    let finalizedText = ""; // 確定した文を蓄積する変数
+    let finalizedText = ""; 
+    let globalIndex = 0; // 【重要】セッションをまたいでも重複を防ぐインデックス
     let isUserStopping = false;
 
     async function refreshDeviceList() {
@@ -85,18 +86,20 @@
         
         recognition.onresult = (e) => {
             let interimText = "";
+            let newContent = "";
+            
+            // globalIndex以降のデータのみを処理する
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
                     if (text) {
                         if (!/[。！？]$/.test(text)) text += "。";
-                        finalizedText += text + "\n"; // 変数に蓄積
+                        finalizedText += text + "\n";
                     }
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
-            // 確定分 ＋ 認識中のテキスト を単純にセット
             document.getElementById('resultTextarea').value = finalizedText + interimText;
             document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
         };
