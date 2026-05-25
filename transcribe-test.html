@@ -43,7 +43,6 @@
         rec.continuous = true;
         rec.interimResults = true;
         rec.lang = 'ja-JP';
-        rec.maxAlternatives = 1; // 予測を1つに限定
 
         // デバイス読み込み
         navigator.mediaDevices.enumerateDevices().then(devices => {
@@ -56,18 +55,19 @@
             });
         });
 
-        // ロジック：余計な加工（句読点補完など）を排除し、生の出力を優先
+        // 認識結果の表示（シンプルな連結のみ）
         rec.onresult = (e) => {
-            let final = "", interim = "";
+            let final = "";
+            let interim = "";
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
-                    final += e.results[i][0].transcript;
+                    final += e.results[i][0].transcript + "\n";
                 } else {
                     interim += e.results[i][0].transcript;
                 }
             }
             if (final) {
-                document.getElementById('final-text').innerText += final + "\n";
+                document.getElementById('final-text').innerText += final;
                 document.getElementById('final-text').scrollTop = document.getElementById('final-text').scrollHeight;
             }
             document.getElementById('interim-text').innerText = interim;
@@ -75,8 +75,8 @@
 
         rec.onend = () => { if(!document.getElementById('stop-btn').disabled) rec.start(); };
         
-        document.getElementById('start-btn').onclick = () => { rec.start(); document.getElementById('start-btn').disabled = true; document.getElementById('stop-btn').disabled = false; };
-        document.getElementById('stop-btn').onclick = () => { rec.stop(); document.getElementById('start-btn').disabled = false; document.getElementById('stop-btn').disabled = true; };
+        document.getElementById('start-btn').onclick = () => { rec.start(); document.getElementById('start-btn').disabled = true; document.getElementById('stop-btn').disabled = false; document.getElementById('status').innerText = "状態: 認識中"; };
+        document.getElementById('stop-btn').onclick = () => { rec.stop(); document.getElementById('start-btn').disabled = false; document.getElementById('stop-btn').disabled = true; document.getElementById('status').innerText = "状態: 停止"; };
         document.getElementById('clear-btn').onclick = () => { document.getElementById('final-text').innerText = ''; };
         document.getElementById('reset-btn').onclick = () => location.reload();
         document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(document.getElementById('final-text').innerText);
