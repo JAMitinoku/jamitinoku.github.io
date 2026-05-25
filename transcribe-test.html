@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定リアルタイム文字起こしツール (完全修正版)</title>
+    <title>文字起こしツール (完成版)</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
@@ -42,12 +42,13 @@
 
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition, isRunning = false;
-    let finalizedLog = []; // 確定済みを確実に蓄積するログ
+    let recognition;
+    let isRunning = false;
+    let finalizedLog = []; // 確定文を安全に保護するログ
 
     const resultTextarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
-    
+
     function initRecognition() {
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
@@ -55,28 +56,23 @@
         recognition.interimResults = true;
 
         recognition.onresult = (event) => {
-            let currentInterim = "";
-            let newFinals = [];
-
-            // 1. 全ての確定結果を再構築
-            for (let i = 0; i < event.results.length; ++i) {
+            let interim = "";
+            
+            // 全履歴を走査して「確定分」と「未確定分」を常に再構築
+            for (let i = 0; i < event.results.length; i++) {
                 if (event.results[i].isFinal) {
-                    newFinals.push(event.results[i][0].transcript.trim());
+                    let transcript = event.results[i][0].transcript.trim();
+                    // 確定したものが既にログに存在するかチェックして追加
+                    if (transcript && !finalizedLog.includes(transcript)) {
+                        finalizedLog.push(transcript);
+                    }
                 } else {
-                    currentInterim = event.results[i][0].transcript.trim();
+                    interim = event.results[i][0].transcript;
                 }
             }
 
-            // 2. 確定ログと照合し、新しい確定文があれば追加（重複させない）
-            newFinals.forEach(text => {
-                if (!finalizedLog.includes(text)) {
-                    finalizedLog.push(text);
-                }
-            });
-
-            // 3. 表示の完全再構築
-            // 確定ログをすべて結合し、その下に未確定文を配置
-            resultTextarea.value = finalizedLog.join("\n") + (currentInterim ? "\n" + currentInterim : "");
+            // 確定ログと現在進行中の未確定分を合成して表示
+            resultTextarea.value = finalizedLog.join("\n") + (interim ? "\n" + interim : "");
             resultTextarea.scrollTop = resultTextarea.scrollHeight;
         };
 
@@ -107,9 +103,10 @@
 
     document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(resultTextarea.value);
     document.getElementById('btnSave').onclick = () => {
+        const blob = new Blob([resultTextarea.value], {type: "text/plain"});
         const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([resultTextarea.value], {type: "text/plain"}));
-        a.download = "記録.txt";
+        a.href = URL.createObjectURL(blob);
+        a.download = "記録_" + new Date().getTime() + ".txt";
         a.click();
     };
 </script>
