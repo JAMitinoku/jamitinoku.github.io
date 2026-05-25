@@ -7,19 +7,19 @@ const cmsData = {
   news: [
     {
       id: 3,
-      date: "2026年05月20日",
+      date: "2026年05月25日",
       category: "管理",
-      title: "文字起こし",
+      title: "文字起こし「Edge推奨」",
       content: "",
       url: "https://jamitinoku.github.io/transcribe.html" // ← リンクがない場合は空欄にするだけ
     },
     {
       id: 2,
-      date: "",
-      category: "",
-      title: "",
+      date: "2026年05月25日",
+      category: "管理",
+      title: "文字起こし（メディア再生）「Edge推奨」",
       content: "",
-      url: "" // ← リンク先を指定
+      url: "https://jamitinoku.github.io/transcribe-m.html" // ← リンクがない場合は空欄にするだけ
     },
     {
       id: 1,
