@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文字起こしツール（デバイス表示機能付き）</title>
+    <title>文字起こしツール（デバイス選択付き）</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
         body, html { height: 100dvh; background-color: var(--bg-color); overflow: hidden; }
         .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
-        .info-bar { font-size: 0.8rem; background: #e9ecef; padding: 5px 10px; border-radius: 4px; color: #495057; display: flex; justify-content: space-between; }
+        .info-bar { font-size: 0.8rem; background: #e9ecef; padding: 5px 10px; border-radius: 4px; color: #495057; }
+        #deviceSelect { width: 100%; padding: 5px; margin-top: 5px; border-radius: 4px; border: 1px solid var(--border-color); }
         .header { display: flex; gap: 10px; align-items: center; }
         .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
         #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
@@ -24,13 +25,13 @@
 <body>
     <div class="container">
         <div class="info-bar">
-            <span id="deviceName">入力デバイス: 取得中...</span>
-            <span>感度: <input type="range" id="gainSlider" min="1" max="3" step="0.5" value="1" style="width:60px"></span>
+            入力デバイス:
+            <select id="deviceSelect"><option>デバイスを読み込み中...</option></select>
         </div>
         <div class="header">
             <div id="statusBadge" class="status-badge">待機中</div>
         </div>
-        <textarea id="resultTextarea" readonly></textarea>
+        <textarea id="resultTextarea" readonly placeholder="認識結果..."></textarea>
         <div class="controls">
             <button id="btnStart" class="btn-start">開始</button>
             <button id="btnStop" class="btn-stop" disabled>停止</button>
@@ -45,48 +46,63 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
-    let isRunning = false;
     let finalizedLog = [];
+    const maxDisplayLines = 15;
 
-    // デバイス名の表示更新
-    async function updateDeviceName() {
+    // デバイス一覧を取得してプルダウンに反映
+    async function refreshDeviceList() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const track = stream.getAudioTracks()[0];
-            document.getElementById('deviceName').innerText = "入力: " + track.label;
-            stream.getTracks().forEach(t => t.stop()); // 表示用のみなので即座に解放
-        } catch (e) {
-            document.getElementById('deviceName').innerText = "入力: 取得不可";
-        }
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioDevices = devices.filter(d => d.kind === 'audioinput');
+            const select = document.getElementById('deviceSelect');
+            select.innerHTML = '';
+            audioDevices.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || `マイク ${select.length + 1}`;
+                select.appendChild(opt);
+            });
+        } catch (e) { document.getElementById('deviceSelect').innerHTML = '<option>取得不可</option>'; }
     }
-    updateDeviceName();
+
+    function updateDisplay(interimText) {
+        const displayLog = finalizedLog.slice(-maxDisplayLines);
+        let text = displayLog.join("\n");
+        if (finalizedLog.length > maxDisplayLines) text = "…\n" + text;
+        document.getElementById('resultTextarea').value = text + (interimText ? "\n" + interimText : "");
+        document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
+    }
 
     function initRecognition() {
-        if (recognition) { recognition.stop(); }
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
-
+        
         recognition.onresult = (e) => {
             let interimText = "";
-            let newFinals = [];
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
                     if (text && !/[。！？]$/.test(text)) text += "。";
-                    newFinals.push(text);
+                    finalizedLog.push(text);
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
-            finalizedLog = [...new Set([...finalizedLog, ...newFinals])];
-            document.getElementById('resultTextarea').value = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
-            document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
+            updateDisplay(interimText);
         };
-        // ... (以下、onstart, onend, ボタンイベントは以前の安定版と同じ)
+        recognition.onstart = () => { document.getElementById('statusBadge').innerText = "認識中"; };
+        recognition.onend = () => { document.getElementById('statusBadge').innerText = "待機中"; };
     }
-    // (以下、開始・停止・保存等のイベント処理はこれまでと同様)
+
+    document.getElementById('btnStart').onclick = () => { initRecognition(); recognition.start(); document.getElementById('btnStart').disabled = true; document.getElementById('btnStop').disabled = false; };
+    document.getElementById('btnStop').onclick = () => { recognition.stop(); document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; };
+    document.getElementById('btnClear').onclick = () => { finalizedLog = []; updateDisplay(); };
+    document.getElementById('btnCopy').onclick = () => { navigator.clipboard.writeText(finalizedLog.join("\n")); alert("コピーしました"); };
+
+    refreshDeviceList();
 </script>
 </body>
 </html>
