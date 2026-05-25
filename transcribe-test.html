@@ -8,10 +8,7 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; background: var(--primary-bg); gap: 10px; box-sizing: border-box; }
         .controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; background: var(--panel-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); }
         button { padding: 10px; cursor: pointer; border: 1px solid #ccc; border-radius: 6px; background: #fff; font-weight: bold; }
-        .area-container { flex-grow: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
-        .area { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-y: auto; white-space: pre-wrap; line-height: 1.7; }
-        #final-text { flex-grow: 2; font-size: 1.1em; }
-        #interim-text { height: 60px; font-size: 1em; color: #666; font-style: italic; border: 1px dashed #aaa; }
+        #text-area { flex-grow: 1; background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-y: auto; white-space: pre-wrap; line-height: 1.7; font-size: 1.1em; }
         .status-bar { font-size: 0.85em; color: #555; padding: 5px; }
         select, input { padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
     </style>
@@ -30,18 +27,16 @@
         <label>ブースト(1-20): <input type="number" id="boost" value="1" min="1" max="20"></label>
     </div>
 
-    <div class="area-container">
-        <div id="final-text" class="area"></div>
-        <div id="interim-text" class="area"></div>
-    </div>
+    <div id="text-area"></div>
 
     <div id="status" class="status-bar">状態: 準備完了</div>
 
     <script>
         const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         rec.continuous = true;
-        rec.interimResults = true;
+        rec.interimResults = false; // リアルタイムの修正を抑止するため確定結果のみ扱う
         rec.lang = 'ja-JP';
+        rec.maxAlternatives = 1;
 
         let audioCtx, gainNode;
 
@@ -66,28 +61,20 @@
             source.connect(gainNode);
         }
 
-        // ロジック：余計な補完を排除し、受信したテキストをそのまま蓄積
         rec.onresult = (e) => {
-            let final = "";
-            let interim = "";
-            for (let i = e.resultIndex; i < e.results.length; i++) {
-                if (e.results[i].isFinal) {
-                    final += e.results[i][0].transcript;
-                } else {
-                    interim += e.results[i][0].transcript;
-                }
+            // 受信した生の音声をそのまま出力
+            const text = e.results[e.results.length - 1][0].transcript;
+            if (text.trim().length > 0) {
+                const area = document.getElementById('text-area');
+                area.innerText += text + "\n";
+                area.scrollTop = area.scrollHeight;
             }
-            if (final) {
-                document.getElementById('final-text').innerText += final;
-                document.getElementById('final-text').scrollTop = document.getElementById('final-text').scrollHeight;
-            }
-            document.getElementById('interim-text').innerText = interim;
         };
 
         rec.onend = () => {
             if (!document.getElementById('stop-btn').disabled) {
-                document.getElementById('status').innerText = "状態: 自動再接続中...";
-                setTimeout(() => rec.start(), 100);
+                document.getElementById('status').innerText = "状態: 自動復旧中...";
+                setTimeout(() => rec.start(), 200);
             }
         };
 
@@ -106,11 +93,11 @@
             document.getElementById('status').innerText = "状態: 停止";
         };
 
-        document.getElementById('clear-btn').onclick = () => document.getElementById('final-text').innerText = '';
-        document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(document.getElementById('final-text').innerText);
+        document.getElementById('clear-btn').onclick = () => document.getElementById('text-area').innerText = '';
+        document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(document.getElementById('text-area').innerText);
         document.getElementById('reset-btn').onclick = () => location.reload();
         document.getElementById('save-btn').onclick = () => {
-            const blob = new Blob([document.getElementById('final-text').innerText], {type: 'text/plain'});
+            const blob = new Blob([document.getElementById('text-area').innerText], {type: 'text/plain'});
             const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'log.txt'; a.click();
         };
 
