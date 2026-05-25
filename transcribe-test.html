@@ -43,10 +43,10 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, isRunning = false;
-    let finalizedLog = []; // 確定文を強固に保持するログ
-    let lastRenderedText = ""; // 高速描画用キャッシュ
+    let finalizedLog = [];
+    let lastRenderedText = "";
 
-    const resultTextarea = document.getElementById('resultTextarea');
+    const textarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
 
     function initRecognition() {
@@ -59,28 +59,30 @@
             let interimText = "";
             let newFinals = [];
 
-            // すべての履歴を走査し、確定分のみを抽出
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
-                    let transcript = e.results[i][0].transcript.trim();
-                    if (transcript) newFinals.push(transcript);
+                    let text = e.results[i][0].transcript.trim();
+                    // 句点付与ロジック
+                    if (text && !/[。！？]$/.test(text)) {
+                        text += "。";
+                    }
+                    // Chrome重複回避ロジック
+                    if (text && finalizedLog[finalizedLog.length - 1] !== text) {
+                        newFinals.push(text);
+                    }
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
 
-            // 確定文を配列に反映（重複させない）
             newFinals.forEach(text => {
-                if (!finalizedLog.includes(text)) {
-                    finalizedLog.push(text);
-                }
+                finalizedLog.push(text);
             });
 
-            // 描画最適化：テキストが変わった時のみDOM更新を行い遅延を排除
             const currentDisplay = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
             if (currentDisplay !== lastRenderedText) {
-                resultTextarea.value = currentDisplay;
-                resultTextarea.scrollTop = resultTextarea.scrollHeight;
+                textarea.value = currentDisplay;
+                textarea.scrollTop = textarea.scrollHeight;
                 lastRenderedText = currentDisplay;
             }
         };
@@ -107,16 +109,12 @@
     };
 
     document.getElementById('btnClear').onclick = () => {
-        if(confirm("消去しますか？")) { 
-            finalizedLog = []; 
-            lastRenderedText = ""; 
-            resultTextarea.value = ""; 
-        }
+        if(confirm("消去しますか？")) { finalizedLog = []; lastRenderedText = ""; textarea.value = ""; }
     };
 
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(resultTextarea.value);
+    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
     document.getElementById('btnSave').onclick = () => {
-        const blob = new Blob([resultTextarea.value], {type: "text/plain"});
+        const blob = new Blob([textarea.value], {type: "text/plain"});
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = "記録_" + new Date().getTime() + ".txt";
