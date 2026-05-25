@@ -25,6 +25,7 @@
     <div class="container">
         <div class="info-bar">
             <span id="deviceName">入力: 取得中...</span>
+            <span>感度: <input type="range" id="gainSlider" min="1" max="3" step="0.5" value="1"></span>
         </div>
         <div class="header">
             <div id="statusBadge" class="status-badge">待機中</div>
@@ -66,7 +67,7 @@
         recognition.interimResults = true;
 
         recognition.onresult = (e) => {
-            // 前回の履歴配列管理をやめ、新しく確定したテキストのみを追記する
+            // e.resultIndex 以降の確定結果のみを直接追記するロジック
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
