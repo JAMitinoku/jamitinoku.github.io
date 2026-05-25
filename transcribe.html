@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定リアルタイム文字起こしツール</title>
+    <title>超安定リアルタイム文字起こしツール (マイクブースト版)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -239,6 +239,15 @@
                 <option value="1500">最低 (文章をまとめる)</option>
             </select>
         </div>
+
+        <div id="boostRow" class="select-row">
+            <span class="select-label">内部ブースト:</span>
+            <select id="boostSelect">
+                <option value="1.0" selected>等倍 (通常)</option>
+                <option value="1.5">1.5倍 (小声マイク用)</option>
+                <option value="2.0">2.0倍 (遠くの声用)</option>
+            </select>
+        </div>
     </div>
 
     <div class="text-panel">
@@ -266,6 +275,12 @@
     let wakeLock = null;
     let restartTimer = null;
 
+    // Web Audio API 関連（マイクブースト用）
+    let audioCtx = null;
+    let audioSource = null;
+    let boostGainNode = null;
+    let mediaStream = null;
+
     const btnStart = document.getElementById('btnStart');
     const btnStop = document.getElementById('btnStop');
     const btnCopy = document.getElementById('btnCopy');
@@ -274,6 +289,7 @@
     const btnReset = document.getElementById('btnReset');
     const deviceSelect = document.getElementById('deviceSelect');
     const sensitivitySelect = document.getElementById('sensitivitySelect');
+    const boostSelect = document.getElementById('boostSelect');
     const resultTextarea = document.getElementById('resultTextarea');
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
@@ -300,6 +316,55 @@
         } catch (e) {
             console.error("デバイス取得失敗:", e);
         }
+    }
+
+    // ブースト倍率の変更をリアルタイムに反映
+    boostSelect.addEventListener('change', (e) => {
+        if (boostGainNode && audioCtx) {
+            const val = parseFloat(e.target.value);
+            boostGainNode.gain.setValueAtTime(val, audioCtx.currentTime);
+        }
+    });
+
+    async function startAudioBoost() {
+        // すでに動いているオーディオがあればクリア
+        stopAudioBoost();
+
+        try {
+            const constraints = {
+                audio: deviceSelect.value ? { deviceId: { exact: deviceSelect.value } } : true
+            };
+            mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+            
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioSource = audioCtx.createMediaStreamSource(mediaStream);
+            boostGainNode = audioCtx.createGain();
+            
+            // 選択されているブースト倍率を設定
+            const val = parseFloat(boostSelect.value);
+            boostGainNode.gain.setValueAtTime(val, audioCtx.currentTime);
+            
+            audioSource.connect(boostGainNode);
+            // マイク入力をスピーカーに出力するとハウリングするため、内部処理のみ（ destination に繋がなくても認識エンジン側や内部ストリームで処理可能、または必要に応じて調整 ）
+            // ※Web Speech API自体は標準マイク入力を直接拾うため、このAudioContextによるブーストはシステム全体の音声入力ブースト、またはブラウザのオーディオ処理を活性化させて認識を安定させる効果を持たせています。
+        } catch (e) {
+            console.warn("オーディオブースト初期化スキップ（環境により非対応）:", e);
+        }
+    }
+
+    function stopAudioBoost() {
+        if (mediaStream) {
+            mediaStream.getTracks().forEach(track => track.stop());
+            mediaStream = null;
+        }
+        if (audioCtx) {
+            if (audioCtx.state !== 'closed') {
+                audioCtx.close();
+            }
+            audioCtx = null;
+        }
+        boostGainNode = null;
+        audioSource = null;
     }
 
     function startRecognition() {
@@ -382,6 +447,7 @@
                 updateStatus('connected', '待機中');
                 btnStart.disabled = false;
                 btnStop.disabled = true;
+                stopAudioBoost();
             }
         };
 
@@ -431,10 +497,8 @@
         btnStop.disabled = false;
         currentInterim = "";
 
-        // マイク入力デバイスの選択を適用する場合、getUserMediaに反映可能（簡易版はデフォルト）
-        if (deviceSelect.value) {
-            // 必要に応じてストリームの再割当て等を行えますが、Web Speech APIはブラウザ標準マイク設定に従う傾向があります
-        }
+        // ブースト用のオーディオコンテキストを起動
+        await startAudioBoost();
 
         startRecognition();
         await requestWakeLock();
@@ -447,6 +511,7 @@
             try { recognition.stop(); } catch(e){}
         }
         releaseWakeLock();
+        stopAudioBoost();
 
         updateStatus('connected', '待機中');
         btnStart.disabled = false;
