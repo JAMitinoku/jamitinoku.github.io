@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>文字起こしツール</title>
+    <title>文字起こしツール（自動再起動対応）</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -58,6 +58,7 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let finalizedLog = [];
+    let isUserStopping = false; // ユーザーが明示的に停止したか管理するフラグ
     const maxDisplayLines = 15;
 
     async function refreshDeviceList() {
@@ -109,33 +110,35 @@
             document.getElementById('statusBadge').style.background = "#d4edda";
         };
 
+        // 【ここがループの心臓部】
         recognition.onend = () => {
-            document.getElementById('statusBadge').innerText = "待機中";
-            document.getElementById('statusBadge').style.background = "#e9ecef";
-            document.getElementById('btnStart').disabled = false;
-            document.getElementById('btnStop').disabled = true;
+            if (!isUserStopping) {
+                // 停止ボタンを押していない場合は自動で再起動
+                try { recognition.start(); } catch(e) { console.log("再起動待機..."); }
+            } else {
+                document.getElementById('statusBadge').innerText = "待機中";
+                document.getElementById('statusBadge').style.background = "#e9ecef";
+            }
         };
 
         recognition.onerror = (e) => {
-            console.error("エラー発生:", e.error);
-            alert("エラーが発生しました: " + e.error);
+            console.log("エラー:", e.error);
         };
     }
 
-    document.getElementById('btnStart').onclick = async () => {
-        try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            initRecognition();
-            recognition.start();
-            document.getElementById('btnStart').disabled = true;
-            document.getElementById('btnStop').disabled = false;
-        } catch (e) {
-            alert("マイクへのアクセスが許可されていません。");
-        }
+    document.getElementById('btnStart').onclick = () => {
+        isUserStopping = false;
+        initRecognition();
+        recognition.start();
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStop').disabled = false;
     };
 
     document.getElementById('btnStop').onclick = () => {
+        isUserStopping = true; // ループを止めるフラグを立てる
         if(recognition) recognition.stop();
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
     };
 
     document.getElementById('btnClear').onclick = () => { finalizedLog = []; updateDisplay(); };
