@@ -78,12 +78,12 @@
     }
 
     function updateDisplay(interimText) {
-        const displayLog = finalizedLog.filter(line => line.length > 0).slice(-maxDisplayLines);
+        // 表示する行数制限と空行除去
+        const displayLog = finalizedLog.filter(line => line.trim().length > 0).slice(-maxDisplayLines);
         let text = displayLog.join("\n");
         if (finalizedLog.length > maxDisplayLines) text = "…\n" + text;
         
-        const finalOutput = text ? (interimText ? text + "\n" + interimText : text) : (interimText || "");
-        document.getElementById('resultTextarea').value = finalOutput;
+        document.getElementById('resultTextarea').value = text + (interimText ? (text ? "\n" : "") + interimText : "");
         document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
     }
 
@@ -95,17 +95,17 @@
         
         recognition.onresult = (e) => {
             let interimText = "";
-            // 今回の確定結果のみを厳密に抽出
+            // e.resultIndexを使用して、新規に確定した結果だけを処理する
             for (let i = e.resultIndex; i < e.results.length; i++) {
-                const transcript = e.results[i][0].transcript.trim();
                 if (e.results[i].isFinal) {
+                    const transcript = e.results[i][0].transcript.trim();
                     if (transcript.length > 0) {
                         let text = transcript;
                         if (!/[。！？]$/.test(text)) text += "。";
                         finalizedLog.push(text);
                     }
                 } else {
-                    interimText = transcript;
+                    interimText = e.results[i][0].transcript.trim();
                 }
             }
             updateDisplay(interimText);
@@ -118,7 +118,7 @@
 
         recognition.onend = () => {
             if (!isUserStopping) {
-                try { recognition.start(); } catch(e) {}
+                try { recognition.start(); } catch(e) { console.log("再起動待ち..."); }
             } else {
                 document.getElementById('statusBadge').innerText = "待機中";
                 document.getElementById('statusBadge').style.background = "#e9ecef";
