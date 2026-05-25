@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <title>文字起こしツール（レスポンシブ＋オートスクロール＋保存）</title>
+  <title>文字起こしツール（保存ボタン追加）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -16,7 +16,6 @@
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
-    /* ウィンドウ幅に応じてレイアウト変更 */
     .wrapper { min-height: 100dvh; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; }
     @media (max-width: 980px){
       .wrapper { grid-template-columns: 1fr; }
@@ -40,25 +39,19 @@
     @media (max-width: 600px){
       .info { grid-template-columns: 1fr; }
     }
-
-    /* レスポンシブで高さを自動調整するための追加 */
-    .card.auto-fill { min-height: 0; flex: 1; }
-
-    /* スクロール時の視認性調整（任意） */
-    textarea::-webkit-scrollbar { width: 8px; height: 8px; }
-    textarea::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="wrapper" id="app">
-    <!-- 左：入力と設定 -->
-    <section class="card auto-fill" aria-label="認識設定">
+    <!-- 左: 入力と設定 -->
+    <section class="card" aria-label="認識設定">
       <h2>入力と認識設定</h2>
       <div class="row" style="justify-content: space-between;">
         <button id="startBtn" class="primary" title="開始">開始</button>
         <button id="stopBtn" title="停止">停止</button>
         <button id="copyBtn" title="コピー">コピー</button>
         <button id="clearBtn" title="クリア">クリア</button>
+        <button id="saveBtn" title="保存">保存</button>
       </div>
 
       <div class="row" style="margin-top:8px;">
@@ -89,8 +82,8 @@
       </div>
     </section>
 
-    <!-- 右：認識エリア -->
-    <section class="card auto-fill" aria-label="認識エリア表示" style="min-height: 300px;">
+    <!-- 右: 認識エリア -->
+    <section class="card" aria-label="認識エリア表示" style="min-height: 300px;">
       <h2>認識エリア</h2>
 
       <div id="recognitionLive" class="section" style="display:block; margin-bottom:8px;">
@@ -140,6 +133,7 @@
     const stopBtn  = document.getElementById('stopBtn');
     const copyBtn  = document.getElementById('copyBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const saveBtn = document.getElementById('saveBtn');
     const deviceSelect = document.getElementById('deviceSelect');
     const sensitivitySelect = document.getElementById('sensitivitySelect');
     const boostFill = document.getElementById('boostFill');
@@ -169,7 +163,17 @@
     }
     function saveState() {
       try {
-        localStorage.setItem('transcript_state', JSON.stringify(state));
+        localStorage.setItem('transcript_state', JSON.stringify({
+          connected: state.connected,
+          device: state.device,
+          devices: state.devices,
+          sensitivity: state.sensitivity,
+          boost: state.boost,
+          liveBuffer: state.liveBuffer,
+          confirmedBuffer: state.confirmedBuffer,
+          inProgress: state.inProgress,
+          retries: state.retries
+        }));
       } catch (e) {}
     }
 
@@ -232,18 +236,15 @@
       statusDevice.textContent = state.device ? (state.devices.find(d => d.id === state.device)?.label ?? '選択済') : '未選択';
 
       liveStatus.textContent = state.inProgress ? '認識中' : '待機';
-      // オートスクロール
       liveText.value = state.liveBuffer;
       confirmedText.value = state.confirmedBuffer;
       confirmedCount.textContent = `${state.confirmedBuffer.length}文字`;
 
-      // 自動でスクロールを一番下へ
-      if (liveText.scrollHeight > liveText.clientHeight) {
-        liveText.scrollTop = liveText.scrollHeight;
-      }
-      if (confirmedText.scrollHeight > confirmedText.clientHeight) {
-        confirmedText.scrollTop = confirmedText.scrollHeight;
-      }
+      // オートスクロール
+      requestAnimationFrame(() => {
+        if (liveText.scrollHeight > liveText.clientHeight) liveText.scrollTop = liveText.scrollHeight;
+        if (confirmedText.scrollHeight > confirmedText.clientHeight) confirmedText.scrollTop = confirmedText.scrollHeight;
+      });
 
       saveState();
     }
@@ -251,13 +252,9 @@
     function appendLive(text) {
       if (!text) return;
       state.liveBuffer += text;
-      // オートスクロール後にUI反映
       liveText.value = state.liveBuffer;
-      // 自動スクロール
       requestAnimationFrame(() => {
-        if (liveText.scrollHeight > liveText.clientHeight) {
-          liveText.scrollTop = liveText.scrollHeight;
-        }
+        if (liveText.scrollHeight > liveText.clientHeight) liveText.scrollTop = liveText.scrollHeight;
       });
     }
 
@@ -292,7 +289,6 @@
           }
         }
         liveText.value = state.liveBuffer;
-        // オートスクロール
         requestAnimationFrame(() => {
           if (liveText.scrollHeight > liveText.clientHeight) liveText.scrollTop = liveText.scrollHeight;
         });
@@ -339,12 +335,12 @@
     }
 
     function startRecognition() {
-      // 権限プロンプトを出してから実認識を開始
+      // 権限を取得して開始
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         stream.getTracks().forEach(t => t.enabled = true);
         startSpeechRecognition();
       }).catch(err => {
-        console.warn('マイク権限が必要です。デモとしてダミーを有効化します。', err);
+        console.warn('マイク権限が必要です。ダミー動作を有効化します。', err);
         if (!state.inProgress) {
           state.inProgress = true;
           updateUI();
@@ -381,6 +377,27 @@
       }
     }
 
+    function exportSavedData() {
+      // 保存データをクリップボードへエクスポート
+      const payload = JSON.stringify({ confirmed: state.confirmedBuffer, live: state.liveBuffer });
+      navigator.clipboard.writeText(payload).then(() => {
+        alert('保存データをクリップボードにコピーしました');
+      }).catch(() => {
+        alert('保存データのコピーに失敗しました');
+      });
+    }
+
+    function importSavedData(text) {
+      try {
+        const obj = JSON.parse(text);
+        if (obj.confirmed !== undefined) state.confirmedBuffer = obj.confirmed;
+        if (obj.live !== undefined) state.liveBuffer = obj.live;
+        updateUI();
+      } catch (e) {
+        // 形式が違えば無視
+      }
+    }
+
     function resetDeviceSelection() {
       enumerateDevices();
       if (state.devices.length) {
@@ -393,7 +410,15 @@
       updateUI();
     }
 
-    // イベント
+    // 新規「保存」機能
+    function saveAllData() {
+      // 現在の全状態を保存
+      saveState();
+      // 簡易通知
+      alert('保存しました');
+    }
+
+    // イベント設定
     startBtn.addEventListener('click', () => { startRecognition(); updateUI(); });
     stopBtn.addEventListener('click', () => { stopRecognition(); updateUI(); });
     copyBtn.addEventListener('click', () => { copyToClipboard(); });
@@ -404,6 +429,7 @@
       confirmedText.value = '';
       updateUI();
     });
+    saveBtn.addEventListener('click', () => { saveAllData(); });
 
     deviceSelect.addEventListener('change', (e) => {
       state.device = e.target.value;
@@ -422,7 +448,6 @@
 
     resetDeviceBtn.addEventListener('click', () => { resetDeviceSelection(); });
 
-    // 初期化と自動復旧の模擬
     function simulateServerDisconnect() {
       if (Math.random() < 0.03) {
         state.connected = false;
@@ -438,14 +463,13 @@
       setInterval(() => { simulateServerDisconnect(); }, 2000);
     }
 
-    window.addEventListener('resize', () => {
-      // 追加のリサイズ処理は不要。CSSが自動で対応。
-      // もし高さ制約を追加したい場合はここにロジックを挟む
-    });
+    window.addEventListener('resize', () => {});
 
     loadState();
     init();
 
+    // ページ離脱前に状態を保存
+    window.addEventListener('beforeunload', saveState);
   </script>
 </body>
 </html>
