@@ -6,11 +6,13 @@
     <title>高精度文字起こしツール</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; gap: 8px; background: #f4f4f9; }
-        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd; }
         .area { flex-grow: 1; overflow-y: auto; background: #fff; border: 1px solid #ddd; padding: 15px; border-radius: 8px; white-space: pre-wrap; line-height: 1.6; }
         #final-text { font-size: 1.1em; color: #222; }
-        #interim-text { font-size: 1em; color: #888; border-top: 1px dashed #ccc; height: 40px; margin-top: 5px; }
-        .info-bar { font-size: 0.8em; color: #555; }
+        #interim-text { font-size: 1em; color: #888; border-top: 1px dashed #ccc; min-height: 40px; margin-top: 5px; font-style: italic; }
+        .info-bar { font-size: 0.8em; color: #555; padding: 5px; }
+        button { padding: 8px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        button:disabled { background: #eee; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -22,12 +24,12 @@
         <button id="save-btn">保存</button>
         <button id="clear-btn">クリア</button>
         <button id="reset-btn">リセット</button>
-        <select id="device-select"><option value="">マイクを選択...</option></select>
+        <select id="device-select"><option>マイク選択...</option></select>
         <label>感度: <input type="range" id="sensitivity" min="0.1" max="2.0" step="0.1" value="1.0"></label>
     </div>
 
-    <div id="final-text" class="area" title="確定エリア"></div>
-    <div id="interim-text" class="area" title="認識中エリア"></div>
+    <div id="final-text" class="area"></div>
+    <div id="interim-text" class="area"></div>
     <div id="status" class="info-bar">状態: 準備完了</div>
 
     <script>
@@ -38,27 +40,20 @@
         recognition.continuous = true;
         recognition.interimResults = true;
 
-        // デバイス一覧取得と初期化
-        async function initDevices() {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const select = document.getElementById('device-select');
-                select.innerHTML = '';
-                devices.filter(d => d.kind === 'audioinput').forEach(d => {
-                    let opt = document.createElement('option');
-                    opt.value = d.deviceId;
-                    opt.text = d.label || 'マイク';
-                    select.add(opt);
-                });
-            } catch (e) {
-                document.getElementById('status').innerText = "状態: マイク権限を許可してください";
-            }
-        }
+        // デバイス初期化
+        navigator.mediaDevices.enumerateDevices().then(devices => {
+            const select = document.getElementById('device-select');
+            devices.filter(d => d.kind === 'audioinput').forEach(d => {
+                let opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.text = d.label || 'マイク';
+                select.add(opt);
+            });
+        });
 
-        // 音声処理（感度調整）のセットアップ
+        // 感度調整用オーディオ設定
         async function setupAudio() {
-            const deviceId = document.getElementById('device-select').value;
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: deviceId ? {exact: deviceId} : undefined } });
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: document.getElementById('device-select').value || undefined } });
             audioCtx = new AudioContext();
             const source = audioCtx.createMediaStreamSource(stream);
             gainNode = audioCtx.createGain();
@@ -66,20 +61,19 @@
             source.connect(gainNode);
         }
 
-        document.getElementById('sensitivity').oninput = (e) => {
-            if (gainNode) gainNode.gain.value = e.target.value;
-        };
+        document.getElementById('sensitivity').oninput = (e) => { if (gainNode) gainNode.gain.value = e.target.value; };
 
         // 認識ロジック
         recognition.onresult = (event) => {
-            let interim = '';
             let final = '';
+            let interim = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     let text = event.results[i][0].transcript.trim();
-                    if (!text || /^[\s .。！？]+$/.test(text)) continue;
-                    if (!/[。！？]$/.test(text)) text += '。';
-                    final += text + '\n';
+                    if (text && !/^[\s .。！？]+$/.test(text)) {
+                        if (!/[。！？]$/.test(text)) text += '。';
+                        final += text + '\n';
+                    }
                 } else {
                     interim += event.results[i][0].transcript;
                 }
@@ -93,11 +87,10 @@
 
         recognition.onend = () => {
             if (!document.getElementById('stop-btn').disabled) {
-                setTimeout(() => recognition.start(), 200);
+                setTimeout(() => recognition.start(), 100);
             }
         };
 
-        // ボタン制御
         document.getElementById('start-btn').onclick = async () => {
             await setupAudio();
             recognition.start();
@@ -113,18 +106,16 @@
             document.getElementById('status').innerText = "状態: 停止";
         };
 
-        document.getElementById('reset-btn').onclick = () => location.reload();
         document.getElementById('clear-btn').onclick = () => { document.getElementById('final-text').innerText = ''; document.getElementById('interim-text').innerText = ''; };
         document.getElementById('copy-btn').onclick = () => navigator.clipboard.writeText(document.getElementById('final-text').innerText);
         document.getElementById('save-btn').onclick = () => {
             const blob = new Blob([document.getElementById('final-text').innerText], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'log.txt';
+            a.download = 'transcript.txt';
             a.click();
         };
-
-        initDevices();
+        document.getElementById('reset-btn').onclick = () => location.reload();
     </script>
 </body>
 </html>
