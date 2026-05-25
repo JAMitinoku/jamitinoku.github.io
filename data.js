@@ -10,7 +10,7 @@ const cmsData = {
       date: "2026年05月20日",
       category: "管理",
       title: "文字起こし",
-      content: "「リアルタイム」と「音声ファイル」両対応の文字起こし",
+      content: "",
       url: "https://jamitinoku.github.io/transcribe.html" // ← リンクがない場合は空欄にするだけ
     },
     {
