@@ -9,7 +9,6 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; padding: 10px; background: var(--primary-bg); gap: 10px; box-sizing: border-box; }
         .controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; background: var(--panel-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border-color); }
         button { padding: 10px; cursor: pointer; border: 1px solid #ccc; border-radius: 6px; background: #fff; font-weight: bold; }
-        button:active { background: #e0e0e0; }
         .area-container { flex-grow: 1; display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
         .area { background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 15px; overflow-y: auto; white-space: pre-wrap; line-height: 1.7; }
         #final-text { flex-grow: 2; font-size: 1.1em; }
@@ -42,13 +41,12 @@
     <script>
         const rec = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         rec.continuous = true;
-        rec.interimResults = false; // 予測変換を抑えるため、確定結果のみを出力する設定
+        rec.interimResults = true;
         rec.lang = 'ja-JP';
-        rec.maxAlternatives = 1;   // 候補を一つに絞る
+        rec.maxAlternatives = 1;
 
         let audioCtx, gainNode;
 
-        // デバイス一覧取得
         async function initDevices() {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const select = document.getElementById('device-select');
@@ -61,31 +59,37 @@
             });
         }
 
-        // 音声処理
         async function setupAudio() {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: document.getElementById('device-select').value || undefined } });
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const source = audioCtx.createMediaStreamSource(stream);
             gainNode = audioCtx.createGain();
-            const vol = (document.getElementById('sensitivity').value / 50) * document.getElementById('boost').value;
-            gainNode.gain.value = vol;
+            gainNode.gain.value = (document.getElementById('sensitivity').value / 50) * document.getElementById('boost').value;
             source.connect(gainNode);
         }
 
         rec.onresult = (e) => {
-            // 確定結果をそのまま書き出す（加工・予測はしない）
-            let text = e.results[e.results.length - 1][0].transcript;
-            if (text.trim().length > 0) {
-                const finalDiv = document.getElementById('final-text');
-                finalDiv.innerText += text + "\n";
-                finalDiv.scrollTop = finalDiv.scrollHeight;
+            let final = "";
+            let interim = "";
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                // 生のトランスクリプトを一切加工せず取得
+                if (e.results[i].isFinal) {
+                    final += e.results[i][0].transcript;
+                } else {
+                    interim += e.results[i][0].transcript;
+                }
             }
+            if (final) {
+                document.getElementById('final-text').innerText += final;
+                document.getElementById('final-text').scrollTop = document.getElementById('final-text').scrollHeight;
+            }
+            document.getElementById('interim-text').innerText = interim;
         };
 
         rec.onend = () => {
             if (!document.getElementById('stop-btn').disabled) {
-                document.getElementById('status').innerText = "状態: 自動復旧中...";
-                setTimeout(() => rec.start(), 300);
+                document.getElementById('status').innerText = "状態: 自動再接続中...";
+                setTimeout(() => rec.start(), 200);
             }
         };
 
@@ -94,7 +98,7 @@
             rec.start();
             document.getElementById('start-btn').disabled = true;
             document.getElementById('stop-btn').disabled = false;
-            document.getElementById('status').innerText = "状態: 接続中";
+            document.getElementById('status').innerText = "状態: 認識中";
         };
 
         document.getElementById('stop-btn').onclick = () => {
