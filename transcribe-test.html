@@ -3,17 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定リアルタイム文字起こしツール (マイクブースト版)</title>
+    <title>超安定リアルタイム文字起こしツール (完全修正版)</title>
     <style>
-        :root {
-            --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da;
-            --primary: #007bff; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; --accent: #e9ecef;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body, html { height: 100%; height: 100dvh; background-color: var(--bg-color); color: var(--text-color); overflow: hidden; }
+        :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+        body, html { height: 100dvh; background-color: var(--bg-color); overflow: hidden; }
         .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
         .header { display: flex; gap: 10px; align-items: center; }
-        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; }
+        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
         #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
         .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .sub-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
@@ -26,7 +23,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <div id="statusBadge" class="status-badge" style="background:#e9ecef">待機中</div>
+            <div id="statusBadge" class="status-badge">待機中</div>
             <select id="boostSelect" style="padding:5px">
                 <option value="1.0">等倍</option><option value="1.5">1.5倍</option><option value="2.0">2.0倍</option>
             </select>
@@ -46,14 +43,11 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, isRunning = false;
-    let finalizedLines = []; 
-    let lastProcessedResult = "";
+    let finalizedLog = []; // 確定済みを確実に蓄積するログ
 
     const resultTextarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
-    const btnStart = document.getElementById('btnStart');
-    const btnStop = document.getElementById('btnStop');
-
+    
     function initRecognition() {
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
@@ -61,57 +55,63 @@
         recognition.interimResults = true;
 
         recognition.onresult = (event) => {
-            let interim = "";
-            let newFinal = "";
+            let currentInterim = "";
+            let newFinals = [];
 
-            // ループ処理で全ての断片を再構築することで一文字の欠けを物理的に防ぐ
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                let transcript = event.results[i][0].transcript;
+            // 1. 全ての確定結果を再構築
+            for (let i = 0; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    let clean = transcript.trim().replace(/。+$/, '');
-                    if (clean && clean !== lastProcessedResult) {
-                        newFinal = clean + "。";
-                        finalizedLines.push(newFinal);
-                        lastProcessedResult = clean;
-                    }
+                    newFinals.push(event.results[i][0].transcript.trim());
                 } else {
-                    interim += transcript;
+                    currentInterim = event.results[i][0].transcript.trim();
                 }
             }
-            
-            resultTextarea.value = finalizedLines.join("\n") + (interim ? (finalizedLines.length ? "\n" : "") + interim : "");
+
+            // 2. 確定ログと照合し、新しい確定文があれば追加（重複させない）
+            newFinals.forEach(text => {
+                if (!finalizedLog.includes(text)) {
+                    finalizedLog.push(text);
+                }
+            });
+
+            // 3. 表示の完全再構築
+            // 確定ログをすべて結合し、その下に未確定文を配置
+            resultTextarea.value = finalizedLog.join("\n") + (currentInterim ? "\n" + currentInterim : "");
             resultTextarea.scrollTop = resultTextarea.scrollHeight;
         };
 
         recognition.onstart = () => { isRunning = true; statusBadge.innerText = "認識中..."; statusBadge.style.background = "#d4edda"; };
-        recognition.onend = () => { if (isRunning) recognition.start(); else { statusBadge.innerText = "待機中"; statusBadge.style.background = "#e9ecef"; } };
+        recognition.onend = () => { 
+            if (isRunning) recognition.start(); 
+            else { statusBadge.innerText = "待機中"; statusBadge.style.background = "#e9ecef"; }
+        };
     }
 
-    btnStart.addEventListener('click', () => {
+    document.getElementById('btnStart').onclick = () => {
         if (!recognition) initRecognition();
         recognition.start();
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-    });
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStop').disabled = false;
+    };
 
-    btnStop.addEventListener('click', () => {
+    document.getElementById('btnStop').onclick = () => {
         isRunning = false;
         recognition.stop();
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-    });
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+    };
 
-    document.getElementById('btnClear').addEventListener('click', () => {
-        if (confirm("消去しますか？")) { finalizedLines = []; lastProcessedResult = ""; resultTextarea.value = ""; }
-    });
+    document.getElementById('btnClear').onclick = () => {
+        if(confirm("消去しますか？")) { finalizedLog = []; resultTextarea.value = ""; }
+    };
 
-    document.getElementById('btnCopy').addEventListener('click', () => navigator.clipboard.writeText(resultTextarea.value));
-    document.getElementById('btnSave').addEventListener('click', () => {
+    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(resultTextarea.value);
+    document.getElementById('btnSave').onclick = () => {
         const a = document.createElement("a");
         a.href = URL.createObjectURL(new Blob([resultTextarea.value], {type: "text/plain"}));
-        a.download = "記録_" + new Date().getTime() + ".txt";
+        a.download = "記録.txt";
         a.click();
-    });
+    };
 </script>
 </body>
 </html>
