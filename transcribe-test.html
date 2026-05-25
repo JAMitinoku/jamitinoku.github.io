@@ -57,8 +57,6 @@
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
-    let finalizedText = ""; 
-    let seenResults = new Set(); // 【追加】処理済みの結果を記録するハッシュセット
     let isUserStopping = false;
 
     async function refreshDeviceList() {
@@ -85,22 +83,27 @@
         recognition.interimResults = true;
         
         recognition.onresult = (e) => {
-            let interimText = "";
-            for (let i = 0; i < e.results.length; i++) {
+            const area = document.getElementById('resultTextarea');
+            let lines = area.value.split('\n');
+            let lastConfirmed = lines.length > 0 ? lines[lines.length - 2] : ""; // 最後に確定した行
+            
+            for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
                     let text = e.results[i][0].transcript.trim();
-                    // 重複チェック: 既に確定済みとして記録されている場合はスキップ
-                    if (text && !seenResults.has(text)) {
+                    // 直前の行と完全に一致する場合は無視する（ダブリ防止）
+                    if (text && text !== lastConfirmed) {
                         if (!/[。！？]$/.test(text)) text += "。";
-                        finalizedText += text + "\n";
-                        seenResults.add(text); // 記録に追加
+                        area.value = area.value.replace(/\n[^ \n]+$/, "") + "\n" + text + "\n";
+                        lastConfirmed = text;
                     }
                 } else {
-                    interimText = e.results[i][0].transcript.trim();
+                    let interimText = e.results[i][0].transcript.trim();
+                    let currentVal = area.value.split('\n');
+                    currentVal[currentVal.length - 1] = interimText;
+                    area.value = currentVal.join('\n');
                 }
             }
-            document.getElementById('resultTextarea').value = finalizedText + interimText;
-            document.getElementById('resultTextarea').scrollTop = document.getElementById('resultTextarea').scrollHeight;
+            area.scrollTop = area.scrollHeight;
         };
 
         recognition.onstart = () => { document.getElementById('statusBadge').innerText = "認識中"; };
@@ -125,13 +128,8 @@
         document.getElementById('btnStop').disabled = true;
     };
 
-    document.getElementById('btnClear').onclick = () => { 
-        finalizedText = ""; 
-        seenResults.clear(); // 履歴もクリア
-        document.getElementById('resultTextarea').value = ""; 
-    };
-    
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(finalizedText);
+    document.getElementById('btnClear').onclick = () => document.getElementById('resultTextarea').value = "";
+    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(document.getElementById('resultTextarea').value);
 
     refreshDeviceList();
 </script>
