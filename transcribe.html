@@ -9,6 +9,8 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
         body, html { height: 100dvh; background-color: var(--bg-color); overflow: hidden; }
         .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
+        /* デバイス表示用スタイル追加 */
+        .device-info { font-size: 0.8rem; color: #666; background: #fff; padding: 5px; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 5px; }
         .header { display: flex; gap: 10px; align-items: center; }
         .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
         #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
@@ -22,6 +24,7 @@
 </head>
 <body>
     <div class="container">
+        <div id="deviceDisplay" class="device-info">入力デバイス: 未接続</div>
         <div class="header">
             <div id="statusBadge" class="status-badge">待機中</div>
             <select id="boostSelect" style="padding:5px">
@@ -51,6 +54,20 @@
     const textarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
     const boostSelect = document.getElementById('boostSelect');
+    const deviceDisplay = document.getElementById('deviceDisplay');
+
+    // デバイス情報を取得して表示する関数
+    async function updateDeviceInfo() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const deviceLabel = stream.getAudioTracks()[0].label;
+            deviceDisplay.innerText = "使用デバイス: " + deviceLabel;
+            // 取得後にストリームを停止してリソースを解放
+            stream.getTracks().forEach(track => track.stop());
+        } catch (err) {
+            deviceDisplay.innerText = "入力デバイス: 取得不可";
+        }
+    }
 
     function initRecognition() {
         if (recognition) { recognition.stop(); }
@@ -58,10 +75,6 @@
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
         recognition.interimResults = true;
-
-        // 感度調整（boostSelectの値を認識パラメータのヒントとして利用）
-        // ※Web Speech APIの仕様上、ここでの数値は論理的な確定タイミングの調整に使用
-        const sensitivity = parseFloat(boostSelect.value);
 
         recognition.onresult = (e) => {
             let interimText = "";
@@ -76,11 +89,7 @@
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
-
-            // 重複排除とログ統合
             finalizedLog = [...new Set([...finalizedLog, ...newFinals])];
-            
-            // 描画の安定化
             textarea.value = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
             textarea.scrollTop = textarea.scrollHeight;
         };
@@ -92,7 +101,14 @@
         };
     }
 
-    document.getElementById('btnStart').onclick = () => { initRecognition(); recognition.start(); document.getElementById('btnStart').disabled = true; document.getElementById('btnStop').disabled = false; };
+    document.getElementById('btnStart').onclick = () => { 
+        updateDeviceInfo(); // 開始時にデバイス情報を更新
+        initRecognition(); 
+        recognition.start(); 
+        document.getElementById('btnStart').disabled = true; 
+        document.getElementById('btnStop').disabled = false; 
+    };
+
     document.getElementById('btnStop').onclick = () => { isRunning = false; if(recognition) recognition.stop(); document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; };
     document.getElementById('btnClear').onclick = () => { if(confirm("消去しますか？")) { finalizedLog = []; textarea.value = ""; } };
     document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
