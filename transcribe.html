@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定リアルタイム文字起こしツール</title>
+    <title>最終完全版 文字起こしツール</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body, html { height: 100%; height: 100dvh; background-color: var(--bg-color); color: var(--text-color); overflow: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+        body, html { height: 100dvh; background-color: var(--bg-color); overflow: hidden; }
         .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
         .header { display: flex; gap: 10px; align-items: center; }
         .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
@@ -24,9 +24,6 @@
     <div class="container">
         <div class="header">
             <div id="statusBadge" class="status-badge">待機中</div>
-            <select id="boostSelect" style="padding:5px">
-                <option value="1.0">等倍</option><option value="1.5">1.5倍</option><option value="2.0">2.0倍</option>
-            </select>
         </div>
         <textarea id="resultTextarea" readonly></textarea>
         <div class="controls">
@@ -44,18 +41,14 @@
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isRunning = false;
+    // 確定文を保持する信頼性の高いログ
     let finalizedLog = [];
-    let lastProcessedIndex = -1; // 重複表示を防ぐためのインデックス管理
 
     const textarea = document.getElementById('resultTextarea');
     const statusBadge = document.getElementById('statusBadge');
 
     function initRecognition() {
-        if (recognition) { 
-            recognition.stop(); 
-            recognition = null; 
-        }
-
+        if (recognition) { recognition.stop(); }
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
         recognition.continuous = true;
@@ -65,26 +58,21 @@
             let interimText = "";
             let newFinals = [];
 
-            // 履歴全体を走査し、未処理の確定分だけを抽出
+            // すべての結果を走査し、ブラウザを問わず確定文を収集
             for (let i = 0; i < e.results.length; i++) {
                 if (e.results[i].isFinal) {
-                    if (i > lastProcessedIndex) {
-                        let text = e.results[i][0].transcript.trim();
-                        if (text && !/[。！？]$/.test(text)) text += "。";
-                        if (text) {
-                            newFinals.push(text);
-                            lastProcessedIndex = i; // インデックスを更新
-                        }
-                    }
+                    let text = e.results[i][0].transcript.trim();
+                    if (text && !/[。！？]$/.test(text)) text += "。";
+                    newFinals.push(text);
                 } else {
                     interimText = e.results[i][0].transcript.trim();
                 }
             }
 
-            // 新しい確定分のみを追加
-            newFinals.forEach(text => finalizedLog.push(text));
-
-            // 表示更新
+            // 【文字落ち・確定消滅対策】
+            // 配列の内容を常に最新の結果でリセットし、重複を排除して再構築
+            finalizedLog = [...new Set([...finalizedLog, ...newFinals])];
+            
             textarea.value = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
             textarea.scrollTop = textarea.scrollHeight;
         };
@@ -96,36 +84,11 @@
         };
     }
 
-    document.getElementById('btnStart').onclick = () => {
-        initRecognition();
-        recognition.start();
-        document.getElementById('btnStart').disabled = true;
-        document.getElementById('btnStop').disabled = false;
-    };
-
-    document.getElementById('btnStop').onclick = () => {
-        isRunning = false;
-        if(recognition) recognition.stop();
-        document.getElementById('btnStart').disabled = false;
-        document.getElementById('btnStop').disabled = true;
-    };
-
-    document.getElementById('btnClear').onclick = () => {
-        if(confirm("消去しますか？")) { 
-            finalizedLog = []; 
-            lastProcessedIndex = -1; 
-            textarea.value = ""; 
-        }
-    };
-
+    document.getElementById('btnStart').onclick = () => { initRecognition(); recognition.start(); document.getElementById('btnStart').disabled = true; document.getElementById('btnStop').disabled = false; };
+    document.getElementById('btnStop').onclick = () => { isRunning = false; if(recognition) recognition.stop(); document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; };
+    document.getElementById('btnClear').onclick = () => { if(confirm("消去しますか？")) { finalizedLog = []; textarea.value = ""; } };
     document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
-    document.getElementById('btnSave').onclick = () => {
-        const blob = new Blob([textarea.value], {type: "text/plain"});
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = "記録_" + new Date().getTime() + ".txt";
-        a.click();
-    };
+    document.getElementById('btnSave').onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([textarea.value], {type: "text/plain"})); a.download = "記録_" + new Date().getTime() + ".txt"; a.click(); };
 </script>
 </body>
 </html>
