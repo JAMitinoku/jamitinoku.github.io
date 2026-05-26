@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>逐語録 Pro - Zero Drop (編集対応版)</title>
+    <title>逐語録 Pro - Zero Drop (インライン編集・削除対応版)</title>
     <style>
         :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; --warning: #ffc107; --info: #17a2b8; --secondary: #6c757d; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
@@ -21,11 +21,8 @@
         #log-screen { flex: 1; padding: 20px 30px; overflow-y: auto; font-size: 18px; line-height: 1.6; border-bottom: 1px solid var(--border); background: #0d1117; }
         #interim-area { padding: 15px 30px; min-height: 3em; background: #0d1117; font-size: 18px; line-height: 1.6; }
         
-        /* 編集機能用のスタイル追加 */
-        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; white-space: pre-wrap; cursor: pointer; transition: background 0.2s; }
-        .block:hover { background: #1c2128; }
-        
-        .interim { color: #8b949e; font-style: italic; cursor: default; }
+        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; white-space: pre-wrap; cursor: pointer; }
+        .interim { color: #8b949e; font-style: italic; }
         
         .log-panel { width: 300px; background: #161b22; display: flex; flex-direction: column; box-sizing: border-box; }
         .log-panel-title { padding: 10px 15px; font-size: 12px; font-weight: bold; border-bottom: 1px solid var(--border); color: #8b949e; text-align: center; }
@@ -92,17 +89,16 @@
 </div>
 
 <script>
-    /* ... (前略: 既存の変数はそのまま維持) ... */
-    let recognition = null, isRunning = false, audioCtx = null, stream = null, source = null, analyser = null;
-    let gainNode = null, bHighPass = null, bPeaking = null, animationFrameId = null, restartTimeoutId = null, multiplier = 2.0;
+    let recognition = null, isRunning = false, audioCtx = null, stream = null, source = null, analyser = null, gainNode = null, bHighPass = null, bPeaking = null, animationFrameId = null, restartTimeoutId = null, multiplier = 2.0;
 
     function resetPermissions() { window.location.reload(); }
+    async function init() { try { const temp = await navigator.mediaDevices.getUserMedia({ audio: true }); temp.getTracks().forEach(t => t.stop()); await refreshDevices(); document.getElementById('btn-start').disabled = false; } catch (e) { document.getElementById('engine-status').innerText = "MIC ERROR"; } }
+    async function refreshDevices() { const sel = document.getElementById('mic-select'); try { const devs = await navigator.mediaDevices.enumerateDevices(); const currentVal = sel.value; sel.innerHTML = ''; devs.filter(d => d.kind === 'audioinput').forEach((d, i) => { const opt = document.createElement('option'); opt.value = d.deviceId; opt.text = d.label || `Mic ${i + 1}`; sel.appendChild(opt); }); if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal; } catch(e) { console.error(e); } }
+    function addStreamLog(text, isFinal) { const logArea = document.getElementById('log-area'); const entry = document.createElement('div'); entry.className = 'log-entry'; entry.innerHTML = `<span class="log-time">[${new Date().toLocaleTimeString()}]</span><span>${isFinal ? '<b>[確定]</b> ' : ''}${text}</span>`; logArea.appendChild(entry); logArea.scrollTop = logArea.scrollHeight; if (logArea.childNodes.length > 50) logArea.removeChild(logArea.firstChild); }
 
-    // 編集機能を追加したブロック作成関数
     function addFinalBlock(text) {
         let cleanedText = text.trim();
         if (!cleanedText) return;
-
         const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
         cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
         if (cleanedText === "") return;
@@ -112,38 +108,90 @@
 
         const newBlock = document.createElement('div');
         newBlock.className = 'block';
-        const hasPunctuation = /[。？！\?\!]$/.test(cleanedText);
-        newBlock.innerText = cleanedText + (hasPunctuation ? "" : "。");
+        newBlock.innerText = cleanedText + (/[。？！\?\!]$/.test(cleanedText) ? "" : "。");
         
-        // 【編集機能】クリックで編集
+        // インライン編集・行削除機能
         newBlock.onclick = function() {
-            const newText = prompt("テキストを編集:", this.innerText);
-            if (newText !== null) this.innerText = newText;
+            if (this.querySelector('textarea')) return;
+            const originalText = this.innerText;
+            this.innerHTML = `<textarea style="width:100%; height:1.6em; font-family:inherit; font-size:18px; background:transparent; color:inherit; border:1px solid var(--accent); outline:none; padding:0;">${originalText}</textarea>`;
+            const textarea = this.querySelector('textarea');
+            textarea.focus();
+            
+            const finalize = () => {
+                const val = textarea.value.trim();
+                if (val === "") this.remove(); // 全削除で要素ごと削除
+                else this.innerText = val;
+            };
+            
+            textarea.onblur = finalize;
+            textarea.onkeydown = function(e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } };
         };
         
         screen.appendChild(newBlock);
         addStreamLog(cleanedText, true);
-
         requestAnimationFrame(() => { screen.scrollTop = screen.scrollHeight; });
     }
 
-    /* ... (中略: refreshDevices, addStreamLog, setupRecognition, updateParams, stopMedia, updateVolumeMeter, startStream 等の関数はそのまま) ... */
-    async function init() { try { const temp = await navigator.mediaDevices.getUserMedia({ audio: true }); temp.getTracks().forEach(t => t.stop()); await refreshDevices(); document.getElementById('btn-start').disabled = false; } catch (e) { document.getElementById('engine-status').innerText = "MIC ERROR"; } }
-    async function refreshDevices() { const sel = document.getElementById('mic-select'); try { const devs = await navigator.mediaDevices.enumerateDevices(); const currentVal = sel.value; sel.innerHTML = ''; devs.filter(d => d.kind === 'audioinput').forEach((d, i) => { const opt = document.createElement('option'); opt.value = d.deviceId; opt.text = d.label || `Mic ${i + 1}`; sel.appendChild(opt); }); if(currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal; } catch(e) { console.error(e); } }
-    function addStreamLog(text, isFinal) { const logArea = document.getElementById('log-area'); const entry = document.createElement('div'); entry.className = 'log-entry'; const timeStr = new Date().toLocaleTimeString(); entry.innerHTML = `<span class="log-time">[${timeStr}]</span><span>${isFinal ? '<b>[確定]</b> ' : ''}${text}</span>`; logArea.appendChild(entry); logArea.scrollTop = logArea.scrollHeight; if (logArea.childNodes.length > 50) logArea.removeChild(logArea.firstChild); }
-    function setupRecognition() { const Speech = window.SpeechRecognition || window.webkitSpeechRecognition; if (!Speech) return null; const rec = new Speech(); rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true; rec.onstart = () => { document.getElementById('engine-status').innerText = "LIVE"; }; rec.onresult = (e) => { const activeLine = document.getElementById('active-line'); let interimStr = ""; for (let i = e.resultIndex; i < e.results.length; i++) { if (e.results[i].isFinal) { addFinalBlock(e.results[i][0].transcript); } else { interimStr += e.results[i][0].transcript; } } const nextText = interimStr || "..."; if (activeLine.innerText !== nextText) { activeLine.innerText = nextText; if (interimStr.trim() !== "") addStreamLog(interimStr, false); } }; rec.onend = () => { if (isRunning) { clearTimeout(restartTimeoutId); restartTimeoutId = setTimeout(() => { if (isRunning && recognition) { try { recognition.start(); } catch(err) { console.warn("再起動失敗:", err); } } }, 300); } }; rec.onerror = (ev) => { if (ev.error !== 'no-speech') console.warn("認識エラー:", ev.error); }; recognition = rec; return rec; }
-    function updateParams() { if (!audioCtx || !gainNode || !bHighPass || !bPeaking) return; const t = audioCtx.currentTime; gainNode.gain.setTargetAtTime(multiplier, t, 0.05); const filterActive = document.getElementById('bgm-filter').checked; if (filterActive) { bHighPass.frequency.setTargetAtTime(150, t, 0.05); bPeaking.frequency.setTargetAtTime(1200, t, 0.05); bPeaking.Q.setTargetAtTime(0.5, t, 0.05); bPeaking.gain.setTargetAtTime(4, t, 0.05); } else { bHighPass.frequency.setTargetAtTime(10, t, 0.05); bPeaking.gain.setTargetAtTime(0, t, 0.05); } }
-    async function stopMedia() { isRunning = false; clearTimeout(restartTimeoutId); if (animationFrameId) { cancelAnimationFrame(animationFrameId); animationFrameId = null; } if (recognition) { recognition.onend = null; try { recognition.stop(); } catch(e){} recognition = null; } if (bPeaking) { try { bPeaking.disconnect(); } catch(e){} bPeaking = null; } if (bHighPass) { try { bHighPass.disconnect(); } catch(e){} bHighPass = null; } if (gainNode) { try { gainNode.disconnect(); } catch(e){} gainNode = null; } if (source) { try { source.disconnect(); } catch(e){} source = null; } if (analyser) { try { analyser.disconnect(); } catch(e){} analyser = null; } if (audioCtx) { try { await audioCtx.close(); } catch(e){} audioCtx = null; } if (stream) { stream.getTracks().forEach(t => { try { t.stop(); } catch(e){} }); stream = null; } }
-    function updateVolumeMeter() { if (!isRunning || !analyser) return; const dataArray = new Uint8Array(analyser.frequencyBinCount); analyser.getByteFrequencyData(dataArray); const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length; const meterFill = document.getElementById('meter-fill'); meterFill.style.width = Math.min(100, avg * 4) + "%"; animationFrameId = requestAnimationFrame(updateVolumeMeter); }
-    async function startStream() { const deviceId = document.getElementById('mic-select').value; const constraints = { audio: { deviceId: deviceId ? { exact: deviceId } : undefined, echoCancellation: true, noiseSuppression: true, autoGainControl: true } }; stream = await navigator.mediaDevices.getUserMedia(constraints); await refreshDevices(); const rec = setupRecognition(); if (rec) rec.start(); audioCtx = new (window.AudioContext || window.webkitAudioContext)(); source = audioCtx.createMediaStreamSource(stream); gainNode = audioCtx.createGain(); bHighPass = audioCtx.createBiquadFilter(); bHighPass.type = "highpass"; bPeaking = audioCtx.createBiquadFilter(); bPeaking.type = "peaking"; analyser = audioCtx.createAnalyser(); analyser.fftSize = 256; source.connect(gainNode).connect(bHighPass).connect(bPeaking).connect(analyser); updateParams(); updateVolumeMeter(); }
-    document.getElementById('btn-start').onclick = async () => { try { document.getElementById('btn-start').disabled = true; document.getElementById('engine-status').innerText = "CONNECTING"; isRunning = true; multiplier = parseFloat(document.getElementById('boost-select').value); await startStream(); document.getElementById('btn-stop').disabled = false; } catch (err) { console.error(err); document.getElementById('engine-status').innerText = "ERROR"; document.getElementById('btn-start').disabled = false; isRunning = false; } };
-    document.getElementById('btn-stop').onclick = async () => { document.getElementById('btn-stop').disabled = true; await stopMedia(); document.getElementById('btn-start').disabled = false; document.getElementById('meter-fill').style.width = "0%"; document.getElementById('engine-status').innerText = "STOPPED"; document.getElementById('active-line').innerText = "停止中"; };
-    document.getElementById('boost-select').onchange = () => { multiplier = parseFloat(document.getElementById('boost-select').value); updateParams(); };
-    document.getElementById('bgm-filter').onchange = () => { updateParams(); };
-    document.getElementById('mic-select').onchange = async () => { if (isRunning) { document.getElementById('engine-status').innerText = "RECONNECTING"; await stopMedia(); isRunning = true; await startStream(); } };
-    function clearAll() { if(!confirm("表示されているテキストとログを消去しますか？")) return; document.getElementById('log-screen').innerHTML = ''; document.getElementById('log-area').innerHTML = ''; document.getElementById('active-line').innerText = "..."; }
-    function copyAll() { const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n'); if (!text.trim()) { alert("コピーするテキストがありません。"); return; } navigator.clipboard.writeText(text).then(() => { const originalText = document.getElementById('engine-status').innerText; document.getElementById('engine-status').innerText = "COPIED!"; setTimeout(() => document.getElementById('engine-status').innerText = originalText, 1500); }).catch(err => { console.error("コピー失敗:", err); alert("コピーに失敗しました。"); }); }
-    function saveAll() { const text = Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n'); if (!text.trim()) { alert("保存するテキストがありません。"); return; } const now = new Date(); const timestamp = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0'); const blob = new Blob([text], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `逐語録_${timestamp}.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); }
+    function setupRecognition() {
+        const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Speech) return null;
+        const rec = new Speech();
+        rec.lang = 'ja-JP'; rec.continuous = true; rec.interimResults = true;
+        rec.onstart = () => { document.getElementById('engine-status').innerText = "LIVE"; };
+        rec.onresult = (e) => {
+            const activeLine = document.getElementById('active-line');
+            let interimStr = "";
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                if (e.results[i].isFinal) { addFinalBlock(e.results[i][0].transcript); }
+                else { interimStr += e.results[i][0].transcript; }
+            }
+            activeLine.innerText = interimStr || "...";
+        };
+        rec.onend = () => { if (isRunning) { restartTimeoutId = setTimeout(() => { if (isRunning && recognition) recognition.start(); }, 300); } };
+        recognition = rec;
+        return rec;
+    }
+
+    function updateParams() {
+        if (!audioCtx || !gainNode) return;
+        const t = audioCtx.currentTime;
+        gainNode.gain.setTargetAtTime(multiplier, t, 0.05);
+        const filterActive = document.getElementById('bgm-filter').checked;
+        bHighPass.frequency.setTargetAtTime(filterActive ? 150 : 10, t, 0.05);
+        bPeaking.gain.setTargetAtTime(filterActive ? 4 : 0, t, 0.05);
+    }
+
+    async function stopMedia() {
+        isRunning = false; clearTimeout(restartTimeoutId);
+        if (recognition) { recognition.onend = null; try { recognition.stop(); } catch(e){} recognition = null; }
+        if (audioCtx) { await audioCtx.close(); audioCtx = null; }
+        if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    }
+
+    function updateVolumeMeter() {
+        if (!isRunning || !analyser) return;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        document.getElementById('meter-fill').style.width = Math.min(100, (dataArray.reduce((a,b)=>a+b,0)/dataArray.length) * 4) + "%";
+        animationFrameId = requestAnimationFrame(updateVolumeMeter);
+    }
+
+    async function startStream() {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: document.getElementById('mic-select').value, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaStreamSource(stream);
+        gainNode = audioCtx.createGain(); bHighPass = audioCtx.createBiquadFilter(); bPeaking = audioCtx.createBiquadFilter(); analyser = audioCtx.createAnalyser();
+        bHighPass.type = "highpass"; bPeaking.type = "peaking"; bPeaking.frequency.value = 1200; bPeaking.Q.value = 0.5;
+        source.connect(gainNode).connect(bHighPass).connect(bPeaking).connect(analyser);
+        updateParams(); setupRecognition().start(); updateVolumeMeter();
+    }
+
+    document.getElementById('btn-start').onclick = async () => { isRunning = true; multiplier = parseFloat(document.getElementById('boost-select').value); await startStream(); document.getElementById('btn-start').disabled = true; document.getElementById('btn-stop').disabled = false; };
+    document.getElementById('btn-stop').onclick = async () => { await stopMedia(); document.getElementById('btn-start').disabled = false; document.getElementById('btn-stop').disabled = true; document.getElementById('meter-fill').style.width = "0%"; document.getElementById('active-line').innerText = "停止中"; };
+    function clearAll() { if(confirm("消去しますか？")) { document.getElementById('log-screen').innerHTML = ''; document.getElementById('log-area').innerHTML = ''; } }
+    function copyAll() { navigator.clipboard.writeText(Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n')); }
+    function saveAll() { const blob = new Blob([Array.from(document.querySelectorAll('#log-screen .block')).map(b => b.innerText).join('\n')], {type:'text/plain'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="逐語録.txt"; a.click(); }
     window.onload = init;
 </script>
 </body>
