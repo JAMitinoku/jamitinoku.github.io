@@ -52,8 +52,8 @@
         <select id="boost-select"></select>
     </div>
     <div class="filter-toggle">
-        <input type="checkbox" id="bgm-filter">
-        <label for="bgm-filter">ノイズ除去</label>
+        <input type="checkbox" id="filler-filter">
+        <label for="filler-filter">フィラー削除</label>
     </div>
     <button id="btn-start">開始</button>
     <button id="btn-stop" disabled>停止</button>
@@ -78,7 +78,7 @@
     let recognition = null;
     let isActive = false;
     let restartTimeoutId = null;
-    let multiplier = 50.0; // デフォルト値を50.0に設定
+    let multiplier = 1.0; // デフォルト値を1.0に変更
     let lastFinalText = "";
 
     function resetPermissions() { 
@@ -87,18 +87,21 @@
         }
     }
 
-    // 元のブースト選択肢（1.0〜200.0）を再生成するロジックを復元
+    // 感度選択肢を5刻み、初期値1.0で生成するロジックに変更
     function initBoostSelect() {
         const boostSelect = document.getElementById('boost-select');
         boostSelect.innerHTML = '';
+        
+        // 初期値 1.0
         const firstOpt = document.createElement('option');
         firstOpt.value = "1.0"; firstOpt.text = "1.0";
+        firstOpt.selected = true;
         boostSelect.appendChild(firstOpt);
 
-        for (let i = 10; i <= 200; i += 10) {
+        // 5から200まで5刻みで追加
+        for (let i = 5; i <= 200; i += 5) {
             const opt = document.createElement('option');
             opt.value = i.toFixed(1); opt.text = i.toFixed(1);
-            if (i === 50) opt.selected = true; // デフォルトは50.0
             boostSelect.appendChild(opt);
         }
     }
@@ -236,9 +239,12 @@
         let cleanedText = text.trim();
         if (!cleanedText) return;
 
-        const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
-        cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
-        if (cleanedText === "") return;
+        // フィラー削除チェックボックスがONの時のみ削除を実行
+        if (document.getElementById('filler-filter').checked) {
+            const fillerRegex = /^(えーと|えーっと|えー、|あのー|あの、|えー|あの|まー|うーん)/g;
+            cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
+            if (cleanedText === "") return;
+        }
 
         let uniqueText = mergeOverlap(lastFinalText, cleanedText);
         uniqueText = uniqueText.trim();
@@ -331,23 +337,7 @@
         }
     };
 
-    document.getElementById('bgm-filter').onchange = async () => {
-        if (isActive) {
-            document.getElementById('engine-status').innerText = "FILTERING";
-            isActive = false;
-            clearTimeout(restartTimeoutId);
-            if (recognition) {
-                try { recognition.abort(); } catch(e){}
-                recognition = null;
-            }
-            setTimeout(() => {
-                isActive = true;
-                document.getElementById('btn-start').click();
-            }, 200);
-        }
-    };
-
-    // 感度変更時のイベントを復元
+    // 感度変更時のイベント
     document.getElementById('boost-select').onchange = () => {
         multiplier = parseFloat(document.getElementById('boost-select').value);
     };
