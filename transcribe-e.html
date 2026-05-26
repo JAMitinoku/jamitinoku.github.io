@@ -2,27 +2,23 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>逐語録 Pro - Zero Drop (安定版)</title>
+    <title>逐語録 Pro - Zero Drop (完全統合・安定版)</title>
     <style>
-        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; --warning: #ffc107; --info: #17a2b8; --secondary: #6c757d; }
+        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
         .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
         .tool-group { display: flex; align-items: center; gap: 5px; }
         label { font-size: 11px; color: #8b949e; }
         button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-        #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
-        #btn-stop { background: var(--danger); color: white; border: none; }
-        
         .workspace { flex: 1; display: flex; overflow: hidden; }
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
         #log-screen { flex: 1; padding: 20px 30px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
-        
-        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; cursor: pointer; word-break: break-all; }
-        .log-panel { width: 300px; background: #161b22; font-family: monospace; font-size: 11px; color: #39ff14; padding: 15px; overflow-y: auto; }
-        
+        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; cursor: pointer; }
+        .log-panel { width: 300px; background: #161b22; font-family: monospace; font-size: 11px; color: #39ff14; padding: 15px; overflow-y: auto; border-left: 1px solid var(--border); }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #222; }
         .monitor { background: #010409; padding: 8px 20px; border-top: 1px solid var(--border); }
-        .meter-bg { height: 3px; background: #333; border-radius: 2px; margin: 5px 0; }
-        #meter-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.1s ease-out; }
+        .meter-bg { height: 3px; background: #333; }
+        #meter-fill { height: 100%; width: 0%; background: var(--accent); }
     </style>
 </head>
 <body>
@@ -35,17 +31,15 @@
     <div class="tool-group">
         <label>感度:</label>
         <select id="boost-select">
-            <script>
-                for(let i=2; i<=20; i+=2) document.write(`<option value="${i}" ${i===2?'selected':''}>${i}</option>`);
-            </script>
+            <script>for(let i=2; i<=20; i+=2) document.write(`<option value="${i}" ${i===2?'selected':''}>${i}</option>`);</script>
         </select>
     </div>
     <div class="tool-group">
         <input type="checkbox" id="filler-filter" checked>
         <label for="filler-filter">フィラー削除</label>
     </div>
-    <button id="btn-start">開始</button>
-    <button id="btn-stop" disabled>停止</button>
+    <button id="btn-start" style="background:var(--success); color:white; font-weight:bold;">開始</button>
+    <button id="btn-stop" disabled style="background:var(--danger); color:white;">停止</button>
     <button onclick="copyAll()">コピー</button>
     <button onclick="saveAll()">保存</button>
     <button onclick="clearAll()" style="color:var(--danger)">クリア</button>
@@ -79,7 +73,7 @@
 
         const b = document.createElement('div');
         b.className = 'block';
-        b.innerText = txt + "。";
+        b.innerText = txt + (/[。？！\?\!]$/.test(txt) ? "" : "。");
         
         b.onclick = function() {
             if (this.querySelector('textarea')) return;
@@ -91,6 +85,10 @@
         };
         document.getElementById('log-screen').appendChild(b);
         document.getElementById('log-screen').scrollTop = 99999;
+        
+        const log = document.getElementById('log-area');
+        log.innerHTML += `<div class="log-entry">[確定] ${txt}</div>`;
+        log.scrollTop = 99999;
     }
 
     document.getElementById('btn-start').onclick = async () => {
@@ -108,7 +106,10 @@
         recognition.onresult = (e) => {
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 if (e.results[i].isFinal) addFinalBlock(e.results[i][0].transcript);
-                else document.getElementById('active-line').innerText = e.results[i][0].transcript;
+                else {
+                    document.getElementById('active-line').innerText = e.results[i][0].transcript;
+                    document.getElementById('log-area').innerHTML += `<div>${e.results[i][0].transcript}</div>`;
+                }
             }
         };
         recognition.start();
@@ -131,7 +132,7 @@
         document.getElementById('btn-stop').disabled = true;
     };
 
-    function clearAll() { if(confirm("消去しますか？")) document.getElementById('log-screen').innerHTML = ''; }
+    function clearAll() { if(confirm("消去しますか？")) { document.getElementById('log-screen').innerHTML = ''; document.getElementById('log-area').innerHTML = ''; } }
     function copyAll() { navigator.clipboard.writeText(Array.from(document.querySelectorAll('.block')).map(b => b.innerText).join('\n')); }
     function saveAll() { const b = new Blob([Array.from(document.querySelectorAll('.block')).map(b => b.innerText).join('\n')], {type:'text/plain'}); const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download="逐語録.txt"; a.click(); }
     window.onload = init;
