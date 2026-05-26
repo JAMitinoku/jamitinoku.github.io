@@ -2,64 +2,56 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>逐語録 Pro - Zero Drop (フィラー切替・編集版)</title>
+    <title>逐語録 Pro - Zero Drop (完全統合版)</title>
     <style>
-        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; --warning: #ffc107; --info: #17a2b8; --secondary: #6c757d; }
+        :root { --bg: #0d1117; --text: #c9d1d9; --accent: #58a6ff; --border: #30363d; --danger: #f85149; --success: #238636; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; }
         .toolbar { background: #161b22; padding: 10px 15px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
         .tool-group { display: flex; align-items: center; gap: 5px; }
         label { font-size: 11px; color: #8b949e; }
         button, select { background: #21262d; color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
         #btn-start { background: var(--success); color: white; border: none; font-weight: bold; }
         #btn-stop { background: var(--danger); color: white; border: none; }
         .filter-toggle { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #adbac7; background: #222; padding: 5px 10px; border-radius: 20px; border: 1px solid #444; }
         
         .workspace { flex: 1; display: flex; overflow: hidden; }
         .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
-        
-        #log-screen { flex: 1; padding: 20px 30px; overflow-y: auto; font-size: 18px; line-height: 1.6; border-bottom: 1px solid var(--border); background: #0d1117; }
-        #interim-area { padding: 15px 30px; min-height: 3em; background: #0d1117; font-size: 18px; line-height: 1.6; }
-        
-        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; word-break: break-all; white-space: pre-wrap; cursor: pointer; }
-        .interim { color: #8b949e; font-style: italic; }
-        
-        .log-panel { width: 300px; background: #161b22; display: flex; flex-direction: column; box-sizing: border-box; }
-        .log-panel-title { padding: 10px 15px; font-size: 12px; font-weight: bold; border-bottom: 1px solid var(--border); color: #8b949e; text-align: center; }
-        .log-area { flex: 1; padding: 15px; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #39ff14; overflow-y: auto; box-sizing: border-box; line-height: 1.4; }
-        .log-entry { margin-bottom: 6px; border-left: 2px solid #333; padding-left: 6px; word-break: break-all; }
-        .log-time { color: #8b949e; margin-right: 5px; }
+        #log-screen { flex: 1; padding: 20px 30px; overflow-y: auto; font-size: 18px; line-height: 1.6; }
+        .block { margin-bottom: 0.8em; border-left: 2px solid var(--accent); padding-left: 12px; min-height: 1.6em; cursor: pointer; }
+        .log-panel { width: 300px; background: #161b22; font-size: 11px; color: #39ff14; padding: 15px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
 <div class="toolbar">
+    <div class="tool-group">
+        <label>感度:</label>
+        <select id="boost-select">
+            <option value="1.0">1.0</option>
+            <option value="2.0" selected>2.0</option>
+            <option value="4.0">4.0</option>
+            <option value="8.0">8.0</option>
+        </select>
+    </div>
     <div class="filter-toggle">
         <input type="checkbox" id="filler-filter" checked>
         <label for="filler-filter">フィラー削除</label>
     </div>
     <button id="btn-start">開始</button>
     <button id="btn-stop" disabled>停止</button>
-    <button onclick="copyAll()">コピー</button>
-    <button onclick="saveAll()" style="background: var(--success); border: none;">保存</button>
-    <button onclick="clearAll()" style="color: var(--danger);">クリア</button>
+    <button onclick="clearAll()">クリア</button>
 </div>
 
 <div class="workspace">
     <div class="main-content">
         <div id="log-screen"></div>
-        <div id="interim-area">
-            <div id="active-line" class="block interim">停止中...</div>
-        </div>
+        <div id="active-line" class="block" style="color: #8b949e; font-style: italic;">停止中</div>
     </div>
-    <div class="log-panel">
-        <div class="log-panel-title">履歴</div>
-        <div id="log-area" class="log-area"></div>
-    </div>
+    <div id="log-area" class="log-panel"></div>
 </div>
 
 <script>
-    let recognition = null, isRunning = false;
+    let recognition = null, audioCtx = null, source = null, gainNode = null, multiplier = 2.0;
 
     function addFinalBlock(text) {
         let cleanedText = text.trim();
@@ -80,21 +72,28 @@
             this.innerHTML = `<textarea style="width:100%; height:1.6em; font-family:inherit; font-size:18px; background:transparent; color:inherit; border:1px solid var(--accent); outline:none; padding:0;">${originalText}</textarea>`;
             const textarea = this.querySelector('textarea');
             textarea.focus();
-            
-            const finalize = () => {
-                const val = textarea.value.trim();
-                if (val === "") this.remove();
-                else this.innerText = val;
+            textarea.onblur = function() {
+                if (this.value.trim() === "") this.parentElement.remove();
+                else this.parentElement.innerText = this.value;
             };
-            textarea.onblur = finalize;
             textarea.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); textarea.blur(); } };
         };
-        
         screen.appendChild(newBlock);
         screen.scrollTop = screen.scrollHeight;
     }
 
-    document.getElementById('btn-start').onclick = () => {
+    document.getElementById('btn-start').onclick = async () => {
+        // 感度設定の反映
+        multiplier = parseFloat(document.getElementById('boost-select').value);
+        
+        // 音声キャプチャと感度適用
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaStreamSource(stream);
+        gainNode = audioCtx.createGain();
+        gainNode.gain.value = multiplier;
+        source.connect(gainNode); // 本来はDestinationに繋がないと音が鳴るが、今回は認識用なのでここで止める
+
         const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new Speech();
         recognition.lang = 'ja-JP';
@@ -109,15 +108,18 @@
             document.getElementById('active-line').innerText = interimStr || "...";
         };
         recognition.start();
-        isRunning = true;
         document.getElementById('btn-start').disabled = true;
         document.getElementById('btn-stop').disabled = false;
     };
 
-    document.getElementById('btn-stop').onclick = () => { recognition.stop(); isRunning = false; document.getElementById('btn-start').disabled = false; document.getElementById('btn-stop').disabled = true; };
-    function clearAll() { if(confirm("消去しますか？")) { document.getElementById('log-screen').innerHTML = ''; } }
-    function copyAll() { navigator.clipboard.writeText(Array.from(document.querySelectorAll('.block')).map(b => b.innerText).join('\n')); }
-    function saveAll() { const blob = new Blob([Array.from(document.querySelectorAll('.block')).map(b => b.innerText).join('\n')], {type:'text/plain'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download="逐語録.txt"; a.click(); }
+    document.getElementById('btn-stop').onclick = () => {
+        if(recognition) recognition.stop();
+        if(audioCtx) audioCtx.close();
+        document.getElementById('btn-start').disabled = false;
+        document.getElementById('btn-stop').disabled = true;
+    };
+
+    function clearAll() { if(confirm("消去しますか？")) document.getElementById('log-screen').innerHTML = ''; }
 </script>
 </body>
 </html>
