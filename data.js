@@ -23,11 +23,11 @@ const cmsData = {
     },
     {
       id: 1,
-      date: "",
-      category: "",
-      title: "",
+      date: "2026年05月25日",
+      category: "管理",
+      title: "文字起こし（編集対応）「Edge推奨」",
       content: "",
-      url: "" // ← リンク先を指定
+      url: "https://jamitinoku.github.io/transcribe-e.html" // ← リンクがない場合は空欄にするだけ
     }
   ]
 };
