@@ -512,6 +512,9 @@
         audioPlayer.src = url;
         audioPlayer.load();
         
+        // 再生パネル（HTML5標準コントロール）の内部音量は常に1.0（100%）に固定
+        audioPlayer.volume = 1.0;
+        
         btnClearFile.style.display = 'block';
         switchMode('media');
     }
@@ -539,16 +542,18 @@
         }
     });
 
-    // 再生音量スライダー変更イベント (5%刻みに完全対応)
+    // 再生音量スライダー変更イベント
     monitorVolume.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         volValue.innerText = `${Math.round(val * 100)}%`;
         
+        // スピーカーから出る音量をWeb Audio APIのゲインノード側で調整
         if (monitorGainNode) {
             monitorGainNode.gain.setValueAtTime(val, audioCtx.currentTime);
-        } else {
-            audioPlayer.volume = Math.min(1, val); 
         }
+        
+        // 再生パネル自体の音量は、スライダーを動かされても常に100%をキープして切り離す
+        audioPlayer.volume = 1.0;
     });
 
     // ドラッグ＆ドロップ
@@ -566,7 +571,14 @@
         e.preventDefault();
         dropOverlay.classList.remove('active');
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            loadMediaFile(e.dataTransfer.files[0]);
+            const file = e.dataTransfer.files[0];
+            
+            // D&Dしたファイルをinput[type="file"]要素に同期させてファイル名を表示する
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            mediaFile.files = dt.files;
+            
+            loadMediaFile(file);
         }
     });
 
@@ -734,18 +746,19 @@
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 
-                if (!isMobile) {
-                    audioSource = audioCtx.createMediaElementSource(audioPlayer);
-                    monitorGainNode = audioCtx.createGain();
-                    monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
-                    audioSource.connect(monitorGainNode);
-                    monitorGainNode.connect(audioCtx.destination);
-                }
+                audioSource = audioCtx.createMediaElementSource(audioPlayer);
+                monitorGainNode = audioCtx.createGain();
+                monitorGainNode.gain.setValueAtTime(parseFloat(monitorVolume.value), audioCtx.currentTime);
+                audioSource.connect(monitorGainNode);
+                monitorGainNode.connect(audioCtx.destination);
             }
             
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
+            
+            // 再生開始時にもパネル内部のボリュームを確実に100%に固定
+            audioPlayer.volume = 1.0;
             audioPlayer.play();
         }
 
