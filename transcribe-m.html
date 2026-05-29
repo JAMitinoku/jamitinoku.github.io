@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (スマホ・5%刻み音量版)</title>
+    <title>超安定文字起こしツール (スマホ・5%刻み音量版・インライン編集統合)</title>
     <style>
         :root {
             --bg-color: #f1f3f5;
@@ -15,6 +15,7 @@
             --danger: #dc3545;
             --secondary: #6c757d;
             --accent: #e9ecef;
+            --edit-accent: #ffad33; /* 編集中の枠線アクセント */
         }
 
         * {
@@ -209,24 +210,69 @@
             color: var(--secondary);
         }
 
+        /* 編集ロジック統合のためのテキストパネルスタイル調整 */
         .text-panel {
             flex: 1;
             min-height: 0; 
         }
 
-        textarea {
+        /* transcribe-mのデザインを維持したエディタ画面 */
+        .log-screen-container {
             width: 100%;
             height: 100%;
-            resize: none;
             padding: 12px;
             border-radius: 12px;
             border: 1px solid var(--border-color);
-            font-size: 1.05rem;
-            line-height: 1.5;
             outline: none;
             background-color: var(--card-bg);
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
-            -webkit-appearance: none;
+            overflow-y: auto;
+        }
+
+        /* transcribe-eから移植したブロックデザイン（色調はmに完全マッチング） */
+        .block {
+            font-size: 1.05rem;
+            line-height: 1.5;
+            margin-bottom: 0.6em;
+            border-left: 3px solid var(--primary);
+            padding-left: 10px;
+            min-height: 1.5em;
+            word-break: break-all;
+            transition: background 0.2s;
+            color: var(--text-color);
+        }
+
+        .block:hover {
+            background: var(--bg-color);
+            cursor: text;
+        }
+
+        .block:focus {
+            outline: none;
+            background: var(--accent);
+            border-left-color: var(--edit-accent);
+            border-radius: 0 6px 6px 0;
+            padding-right: 6px;
+        }
+
+        .interim-live {
+            font-size: 1.05rem;
+            line-height: 1.5;
+            color: var(--secondary);
+            font-style: italic;
+            border-left: 3px dashed var(--border-color);
+            padding-left: 10px;
+            margin-bottom: 0.6em;
+            min-height: 1.5em;
+            word-break: break-all;
+        }
+
+        /* プレースホルダーのシミュレート */
+        .log-screen-container:empty::before {
+            content: "「開始」ボタンを押して話すか、メディアを再生してください。D&D読み込み、テキストを直接タップして編集・修正・Enter確定にも完全対応しています...";
+            color: var(--secondary);
+            font-size: 1.05rem;
+            line-height: 1.5;
         }
 
         #dropOverlay {
@@ -322,9 +368,9 @@
                 font-size: 0.9rem;
                 height: 36px;
             }
-            textarea {
+            .block, .interim-live, .log-screen-container:empty::before {
                 font-size: 1.15rem;
-                padding: 18px;
+                padding-left: 14px;
             }
             .controls-panel {
                 flex-direction: row;
@@ -402,12 +448,12 @@
         <div id="boostRow" class="select-row" style="margin-top: 6px; display: flex;">
             <span class="select-label">内部ブースト:</span>
             <select id="boostSelect">
-                </select>
+            </select>
         </div>
     </div>
 
     <div class="text-panel">
-        <textarea id="resultTextarea" placeholder="「開始」ボタンを押して話すか、メディアを再生してください。D&D読み込み、追記にも完全対応しています..." readonly></textarea>
+        <div id="logScreen" class="log-screen-container"></div>
     </div>
 
     <div class="controls-panel">
@@ -460,7 +506,7 @@
     const deviceSelect = document.getElementById('deviceSelect');
     const sensitivitySelect = document.getElementById('sensitivitySelect');
     const boostSelect = document.getElementById('boostSelect');
-    const resultTextarea = document.getElementById('resultTextarea');
+    const logScreen = document.getElementById('logScreen'); // エディタ画面参照
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
 
@@ -475,8 +521,7 @@
     const volValue = document.getElementById('volValue');
     const dropOverlay = document.getElementById('dropOverlay');
 
-    let finalizedLines = [];
-    let currentInterim = "";
+    let lastFinalText = ""; // 重複判定用（transcribe-eロジック）
 
     // タブ切り替え
     tabRealtime.addEventListener('click', () => switchMode('realtime'));
@@ -516,7 +561,6 @@
         audioPlayer.src = url;
         audioPlayer.load();
         
-        // 再生パネル（HTML5標準コントロール）の内部音量は常に1.0（100%）に固定
         audioPlayer.volume = 1.0;
         
         btnClearFile.style.display = 'block';
@@ -546,17 +590,13 @@
         }
     });
 
-    // 再生音量スライダー変更イベント
     monitorVolume.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         volValue.innerText = `${Math.round(val * 100)}%`;
         
-        // スピーカーから出る音量をWeb Audio APIのゲインノード側で調整
         if (monitorGainNode) {
             monitorGainNode.gain.setValueAtTime(val, audioCtx.currentTime);
         }
-        
-        // 再生パネル自体の音量は、スライダーを動かされても常に100%をキープして切り離す
         audioPlayer.volume = 1.0;
     });
 
@@ -577,7 +617,6 @@
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const file = e.dataTransfer.files[0];
             
-            // D&Dしたファイルをinput[type="file"]要素に同期させてファイル名を表示する
             const dt = new DataTransfer();
             dt.items.add(file);
             mediaFile.files = dt.files;
@@ -607,6 +646,73 @@
         }
     }
 
+    // 重複カットロジック (transcribe-eから完全移植)
+    function mergeOverlap(prev, next) {
+        if (!prev) return next;
+        if (prev === next) return ""; 
+        
+        if (prev.length > 4 && next.length > 4) {
+            if (prev.includes(next) || next.includes(prev)) {
+                if (prev.endsWith(next)) return "";
+            }
+        }
+
+        let maxLength = Math.min(prev.length, next.length);
+        for (let len = maxLength; len > 0; len--) {
+            if (prev.endsWith(next.substring(0, len))) {
+                return next.substring(len); 
+            }
+        }
+        return next;
+    }
+
+    // 単一確定ブロックを追加するロジック (transcribe-eベース＋m統合)
+    function addFinalBlock(text) {
+        let cleanedText = text.trim();
+        if (!cleanedText) return;
+
+        cleanedText = cleanedText.replace(/[、。]+$/, "");
+
+        let uniqueText = mergeOverlap(lastFinalText, cleanedText);
+        uniqueText = uniqueText.trim();
+        
+        if (!uniqueText) return;
+
+        lastFinalText = cleanedText;
+
+        const newBlock = document.createElement('div');
+        newBlock.className = 'block';
+
+        const hasPunctuation = /[。？！\?\!]$/.test(uniqueText);
+        newBlock.innerText = uniqueText + (hasPunctuation ? "" : "。");
+        
+        // 【重要】transcribe-eのその場編集・クリックロジック
+        newBlock.onclick = function() {
+            if (this.getAttribute('contenteditable') !== 'true') {
+                this.setAttribute('contenteditable', 'true');
+                this.focus();
+            }
+        };
+
+        newBlock.onblur = function() {
+            this.removeAttribute('contenteditable');
+            this.innerText = this.innerText.trim();
+            if (this.innerText === "") {
+                this.remove();
+            }
+        };
+
+        newBlock.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.blur();
+            }
+        };
+        
+        logScreen.appendChild(newBlock);
+        autoScroll();
+    }
+
     function startRecognition() {
         if (!SpeechRecognition) {
             alert("お使いのブラウザは音声認識に対応していません。");
@@ -620,7 +726,7 @@
 
         recognition = new SpeechRecognition();
         recognition.lang = 'ja-JP';
-        recognition.continuous = false; 
+        recognition.continuous = (currentMode === 'media'); // メディア時は連続、リアルタイムは切断復帰型を維持
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
 
@@ -629,31 +735,32 @@
         };
 
         recognition.onresult = (event) => {
+            // 一時テキストブロックの消去
+            const oldInterim = document.getElementById('interim-live-block');
+            if (oldInterim) oldInterim.remove();
+
             let interimText = "";
+
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 const result = event.results[i];
-                let text = result[0].transcript.trim();
-                if (!text) continue;
+                let text = result[0].transcript;
 
                 if (result.isFinal) {
-                    text = text.replace(/[、。]+$/, "");
-                    if (text) {
-                        const targetLine = text + "。";
-                        const isDuplicate = finalizedLines.length > 0 && 
-                            (finalizedLines[finalizedLines.length - 1] === targetLine || 
-                             finalizedLines.slice(-2).includes(targetLine));
-
-                        if (!isDuplicate) {
-                            finalizedLines.push(targetLine);
-                        }
-                    }
-                    currentInterim = ""; 
+                    addFinalBlock(text);
                 } else {
-                    interimText = text;
-                    currentInterim = text;
+                    interimText += text;
                 }
             }
-            renderText(interimText);
+
+            // 未確定のリアルタイムテキスト表示
+            if (interimText.trim()) {
+                const interimBlock = document.createElement('div');
+                interimBlock.id = 'interim-live-block';
+                interimBlock.className = 'interim-live';
+                interimBlock.innerText = interimText.trim();
+                logScreen.appendChild(interimBlock);
+                autoScroll();
+            }
         };
 
         recognition.onerror = (event) => {
@@ -664,15 +771,12 @@
         };
 
         recognition.onend = () => {
-            if (currentInterim) {
-                let text = currentInterim.replace(/[、。]+$/, "").trim();
-                if (text) {
-                    const targetLine = text + "。";
-                    if (!finalizedLines.slice(-2).includes(targetLine)) {
-                        finalizedLines.push(targetLine);
-                    }
-                }
-                currentInterim = "";
+            // 未確定テキストが残っていれば最後に確定へ流す
+            const oldInterim = document.getElementById('interim-live-block');
+            if (oldInterim) {
+                const remainder = oldInterim.innerText;
+                oldInterim.remove();
+                if (remainder) addFinalBlock(remainder);
             }
 
             if (isRunning) {
@@ -681,7 +785,6 @@
                     return;
                 }
 
-                renderText("");
                 const delay = Math.max(400, parseInt(sensitivitySelect.value, 10));
                 restartTimer = setTimeout(() => {
                     if (isRunning) {
@@ -705,15 +808,6 @@
         }
     }
 
-    function renderText(interimText) {
-        let currentDisplay = finalizedLines.join("\n");
-        if (interimText) {
-            currentDisplay += (currentDisplay ? "\n" : "") + interimText;
-        }
-        resultTextarea.value = currentDisplay;
-        autoScroll();
-    }
-
     async function requestWakeLock() {
         if ('wakeLock' in navigator) {
             try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
@@ -732,7 +826,14 @@
     }
 
     function autoScroll() {
-        resultTextarea.scrollTop = resultTextarea.scrollHeight;
+        requestAnimationFrame(() => {
+            logScreen.scrollTop = logScreen.scrollHeight;
+        });
+    }
+
+    // 全エディタ内ブロックからプレーンテキストを生成するヘルパー
+    function getAllText() {
+        return Array.from(document.querySelectorAll('#logScreen .block')).map(b => b.innerText).join('\n');
     }
 
     btnStart.addEventListener('click', async () => {
@@ -744,7 +845,6 @@
         isRunning = true;
         btnStart.disabled = true;
         btnStop.disabled = false;
-        currentInterim = "";
 
         if (currentMode === 'media') {
             if (!audioCtx) {
@@ -761,7 +861,6 @@
                 await audioCtx.resume();
             }
             
-            // 再生開始時にもパネル内部のボリュームを確実に100%に固定
             audioPlayer.volume = 1.0;
             audioPlayer.play();
         }
@@ -790,14 +889,15 @@
     btnStop.addEventListener('click', stopProcess);
 
     btnCopy.addEventListener('click', () => {
-        if (!resultTextarea.value) return;
-        navigator.clipboard.writeText(resultTextarea.value)
+        const text = getAllText();
+        if (!text) return;
+        navigator.clipboard.writeText(text)
             .then(() => alert("クリップボードにコピーしました"))
             .catch(err => console.error("コピー失敗:", err));
     });
 
     btnSave.addEventListener('click', () => {
-        const text = resultTextarea.value;
+        const text = getAllText();
         if (!text) return;
         const blob = new Blob([text], { type: 'text/plain' });
         const a = document.createElement('a');
@@ -811,9 +911,8 @@
 
     btnClear.addEventListener('click', () => {
         if (confirm("表示されているテキストを消去しますか？")) {
-            finalizedLines = [];
-            currentInterim = "";
-            resultTextarea.value = "";
+            logScreen.innerHTML = "";
+            lastFinalText = "";
         }
     });
 
