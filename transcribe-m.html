@@ -399,13 +399,10 @@
                 <option value="1500">最低 (文章をまとめる)</option>
             </select>
         </div>
-        <div id="boostRow" class="select-row" style="margin-top: 6px; display: none;">
+        <div id="boostRow" class="select-row" style="margin-top: 6px; display: flex;">
             <span class="select-label">内部ブースト:</span>
             <select id="boostSelect">
-                <option value="1.0" selected>等倍 (通常)</option>
-                <option value="1.5">1.5倍 (小声ファイル用)</option>
-                <option value="2.0">2.0倍 (遠くの声用)</option>
-            </select>
+                </select>
         </div>
     </div>
 
@@ -428,6 +425,20 @@
 </div>
 
 <script>
+    // 内部ブーストのセレクトボックスを1～20倍まで1刻みで生成
+    const boostSelectElement = document.getElementById('boostSelect');
+    for (let i = 1; i <= 20; i++) {
+        const option = document.createElement('option');
+        option.value = i.toFixed(1);
+        if (i === 1) {
+            option.text = "1.0倍 (通常)";
+            option.selected = true;
+        } else {
+            option.text = `${i}.0倍`;
+        }
+        boostSelectElement.appendChild(option);
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
     let isRunning = false; 
@@ -440,8 +451,6 @@
     let audioSource = null;
     let monitorGainNode = null;
 
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
     const btnStart = document.getElementById('btnStart');
     const btnStop = document.getElementById('btnStop');
     const btnCopy = document.getElementById('btnCopy');
@@ -451,7 +460,6 @@
     const deviceSelect = document.getElementById('deviceSelect');
     const sensitivitySelect = document.getElementById('sensitivitySelect');
     const boostSelect = document.getElementById('boostSelect');
-    const boostRow = document.getElementById('boostRow');
     const resultTextarea = document.getElementById('resultTextarea');
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
@@ -469,10 +477,6 @@
 
     let finalizedLines = [];
     let currentInterim = "";
-
-    if (!isMobile) {
-        boostRow.style.display = 'flex'; 
-    }
 
     // タブ切り替え
     tabRealtime.addEventListener('click', () => switchMode('realtime'));
