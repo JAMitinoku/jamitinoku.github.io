@@ -11,7 +11,7 @@ const cmsData = {
       category: "管理",
       title: "文字起こし「Edge推奨」",
       content: "",
-      url: "https://jamitinoku.github.io/transcribe.html" // ← リンクがない場合は空欄にするだけ
+      url: "https://jamitinoku.github.io/transcribe-e4.html" // ← リンクがない場合は空欄にするだけ
     },
     {
       id: 2,
