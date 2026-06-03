@@ -153,14 +153,12 @@
     document.getElementById('tabRealtime').onclick = () => { mode='realtime'; document.getElementById('panelRealtime').classList.add('active'); document.getElementById('panelMedia').classList.remove('active'); document.getElementById('tabRealtime').classList.add('active'); document.getElementById('tabMedia').classList.remove('active'); };
     document.getElementById('tabMedia').onclick = () => { mode='media'; document.getElementById('panelRealtime').classList.remove('active'); document.getElementById('panelMedia').classList.add('active'); document.getElementById('tabRealtime').classList.remove('active'); document.getElementById('tabMedia').classList.add('active'); };
     
-    // 音量制御とファイル解除
     document.getElementById('monitorVolume').oninput = (e) => player.volume = e.target.value;
     document.getElementById('mediaFile').onchange = (e) => { 
         if(e.target.files.length > 0) {
             player.src = URL.createObjectURL(e.target.files[0]);
         }
     };
-    // ファイル解除ボタン機能
     document.getElementById('mediaFile').onclick = (e) => { 
         e.target.value = ''; 
         player.src = ''; 
@@ -169,11 +167,15 @@
 
     document.getElementById('btnReset').onclick = init;
     document.getElementById('btnClear').onclick = () => { finalContainer.innerHTML = ''; interimDiv.innerText = ''; };
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(Array.from(document.querySelectorAll('.block')).map(b=>b.textContent).join('\n')).then(()=>alert("コピー済"));
+    document.getElementById('btnCopy').onclick = () => {
+        const text = Array.from(document.querySelectorAll('.block')).map(b=>b.textContent).join('\n');
+        if(!text.trim()) return;
+        navigator.clipboard.writeText(text).then(()=>alert("コピー済"));
+    };
     
-    // 保存機能
     document.getElementById('btnSave').onclick = () => {
         const text = Array.from(document.querySelectorAll('.block')).map(b=>b.textContent).join('\n');
+        if(!text.trim()) { alert("保存するテキストがありません。"); return; }
         const blob = new Blob([text], {type: "text/plain"});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
