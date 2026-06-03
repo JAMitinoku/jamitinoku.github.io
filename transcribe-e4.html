@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>超安定文字起こしツール (修正版)</title>
+    <title>超安定文字起こしツール (完成版)</title>
     <style>
         :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --primary: #007bff; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; --accent: #e9ecef; }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -40,7 +40,7 @@
     </style>
 </head>
 <body>
-<div class="container">
+<div class="container" ondragover="event.preventDefault()" ondrop="event.preventDefault()">
     <div class="header-panel">
         <div class="status-bar">
             <span>接続状態:</span>
@@ -153,17 +153,19 @@
     document.getElementById('tabRealtime').onclick = () => { mode='realtime'; document.getElementById('panelRealtime').classList.add('active'); document.getElementById('panelMedia').classList.remove('active'); document.getElementById('tabRealtime').classList.add('active'); document.getElementById('tabMedia').classList.remove('active'); };
     document.getElementById('tabMedia').onclick = () => { mode='media'; document.getElementById('panelRealtime').classList.remove('active'); document.getElementById('panelMedia').classList.add('active'); document.getElementById('tabRealtime').classList.remove('active'); document.getElementById('tabMedia').classList.add('active'); };
     
-    // 音量分離とファイル解除
+    // 音量制御とファイル解除
     document.getElementById('monitorVolume').oninput = (e) => player.volume = e.target.value;
     document.getElementById('mediaFile').onchange = (e) => { 
-        if(e.target.files[0]) {
+        if(e.target.files.length > 0) {
             player.src = URL.createObjectURL(e.target.files[0]);
-        } else {
-            player.src = "";
         }
     };
-    // ファイル解除用（ファイルを空にするか選択キャンセル時にリセット）
-    document.getElementById('mediaFile').onclick = (e) => { e.target.value = ''; player.src = ""; };
+    // ファイル解除ボタン機能
+    document.getElementById('mediaFile').onclick = (e) => { 
+        e.target.value = ''; 
+        player.src = ''; 
+        player.load();
+    };
 
     document.getElementById('btnReset').onclick = init;
     document.getElementById('btnClear').onclick = () => { finalContainer.innerHTML = ''; interimDiv.innerText = ''; };
@@ -175,7 +177,7 @@
         const blob = new Blob([text], {type: "text/plain"});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = "transcription_" + new Date().toISOString().slice(0,19).replace(/[:]/g, '') + ".txt";
+        a.download = "text_" + new Date().getTime() + ".txt";
         a.click();
     };
 
