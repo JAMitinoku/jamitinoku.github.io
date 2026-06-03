@@ -85,26 +85,36 @@
     const finalContainer = document.getElementById('finalContainer');
     const interimDiv = document.getElementById('interim');
     const player = document.getElementById('audioPlayer');
+    const panel = document.getElementById('textPanel');
+    let currentInterimText = ''; // ドロップ救出バッファ
 
     function updateStatus(listening) {
         document.getElementById('statusDot').className = "status-dot " + (listening ? "listening" : "connected");
         document.getElementById('statusText').innerText = listening ? "認識中..." : "待機中";
     }
 
+    // 待ち・遅延を極限まで削った最速確定関数
     function addBlock(text) {
-        if(!text.trim()) return;
+        let t = text.trim();
+        if(!t) return;
+
+        // スペースを「、」に一発置換
+        t = t.replace(/[ 　]/g, '、');
+
+        // 文末処理（。？！がなければ足す）
+        if(!t.endsWith('。') && !t.endsWith('？') && !t.endsWith('！') && !t.endsWith('?')) {
+            t += '。';
+        }
+
         const div = document.createElement('div');
-        div.className = 'block'; div.textContent = text;
+        div.className = 'block'; div.textContent = t;
         div.onclick = () => { div.contentEditable = true; div.focus(); };
         div.onblur = () => { div.contentEditable = false; if(!div.textContent.trim()) div.remove(); };
         div.onkeydown = (e) => { if (e.key === 'Enter') div.blur(); };
-        finalContainer.appendChild(div);
         
-        // 修正: レンダリング後に正確な位置へスクロール
-        requestAnimationFrame(() => {
-            const panel = document.getElementById('textPanel');
-            panel.scrollTop = panel.scrollHeight;
-        });
+        // 描画フレームを待たずに即時DOM注入
+        finalContainer.appendChild(div);
+        panel.scrollTop = panel.scrollHeight; // 即時スクロール
     }
 
     async function init() {
@@ -124,23 +134,62 @@
     }
 
     function startRec() {
+        if (!Rec) return;
         rec = new Rec();
-        rec.lang = 'ja-JP'; rec.continuous = true;
+        rec.lang = 'ja-JP'; 
+        rec.continuous = true;
         rec.interimResults = true;
-        rec.onstart = () => updateStatus(true);
+        
+        rec.onstart = () => {
+            updateStatus(true);
+            currentInterimText = '';
+        };
+        
         rec.onresult = (e) => {
             let interim = '';
-            for(let i=e.resultIndex; i<e.results.length; ++i) {
-                if(e.results[i].isFinal) addBlock(e.results[i][0].transcript);
-                else interim += e.results[i][0].transcript;
+            // オリジナルの完全な多重表示ガード
+            for(let i = e.resultIndex; i < e.results.length; ++i) {
+                if(e.results[i].isFinal) {
+                    addBlock(e.results[i][0].transcript);
+                    currentInterimText = ''; // 確定につきバッファクリア
+                } else {
+                    interim += e.results[i][0].transcript;
+                }
             }
             interimDiv.innerText = interim;
+            currentInterimText = interim; // ドロップガード用に常に記憶
         };
+        
         rec.onend = () => {
-            if(isRunning) setTimeout(() => { try { rec.start(); } catch(e){} }, document.getElementById('sensitivitySelect').value);
-            else updateStatus(false);
+            // 【最速ドロップ救出】関数呼び出しすら挟まず、ここで1ナノ秒でも早くDOMへ直撃させる
+            if(currentInterimText.trim()) {
+                let t = currentInterimText.trim().replace(/[ 　]/g, '、');
+                if(!t.endsWith('。') && !t.endsWith('？') && !t.endsWith('！') && !t.endsWith('?')) t += '。';
+                
+                const div = document.createElement('div');
+                div.className = 'block'; div.textContent = t;
+                div.onclick = () => { div.contentEditable = true; div.focus(); };
+                div.onblur = () => { div.contentEditable = false; if(!div.textContent.trim()) div.remove(); };
+                div.onkeydown = (e) => { if (e.key === 'Enter') div.blur(); };
+                
+                finalContainer.appendChild(div);
+                panel.scrollTop = panel.scrollHeight;
+                currentInterimText = '';
+            }
+            interimDiv.innerText = '';
+
+            if(isRunning) {
+                const ms = parseInt(document.getElementById('sensitivitySelect').value, 10);
+                setTimeout(() => { 
+                    if(isRunning) {
+                        try { rec.start(); } catch(e){} 
+                    }
+                }, isNaN(ms) ? 250 : ms);
+            } else {
+                updateStatus(false);
+            }
         };
-        rec.start();
+        try { rec.start(); } catch(e) {}
     }
 
     document.getElementById('btnStart').onclick = () => {
@@ -153,6 +202,7 @@
         if(rec) rec.stop();
         if(mode === 'media') player.pause();
         interimDiv.innerText = '';
+        currentInterimText = '';
     };
 
     document.getElementById('tabRealtime').onclick = () => { mode='realtime'; document.getElementById('panelRealtime').classList.add('active'); document.getElementById('panelMedia').classList.remove('active'); document.getElementById('tabRealtime').classList.add('active'); document.getElementById('tabMedia').classList.remove('active'); };
@@ -171,7 +221,7 @@
     };
 
     document.getElementById('btnReset').onclick = init;
-    document.getElementById('btnClear').onclick = () => { finalContainer.innerHTML = ''; interimDiv.innerText = ''; };
+    document.getElementById('btnClear').onclick = () => { finalContainer.innerHTML = ''; interimDiv.innerText = ''; currentInterimText = ''; };
     document.getElementById('btnCopy').onclick = () => {
         const text = Array.from(document.querySelectorAll('.block')).map(b=>b.textContent).join('\n');
         if(!text.trim()) return;
