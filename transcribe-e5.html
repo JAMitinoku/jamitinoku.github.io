@@ -57,17 +57,16 @@
     
     let recognition;
     let isRunning = false;
-    let isRestarting = false; // 再起動フラグ
+    let isRestarting = false;
     let isFocused = false;
 
     output.addEventListener('focus', () => isFocused = true);
     output.addEventListener('blur', () => isFocused = false);
 
-    // 設定変更時の再起動処理をより確実に
     const handleSettingsChange = () => {
         if (isRunning) {
-            isRestarting = true; // 再起動フラグを立てる
-            recognition.stop();  // 止める
+            isRestarting = true;
+            recognition.stop();
         }
     };
     sensitivity.addEventListener('change', handleSettingsChange);
@@ -79,10 +78,11 @@
         recognition.interimResults = true;
         recognition.continuous = true;
 
+        // Chromeの音声入力維持のための工夫
         recognition.onstart = () => { 
             status.innerHTML = '<span style="color:green;">● 認識中</span>'; 
             isRunning = true; 
-            isRestarting = false; // 起動したらフラグを下ろす
+            isRestarting = false; 
         };
 
         recognition.onresult = (event) => {
@@ -123,12 +123,18 @@
             interim.innerText = interimTranscript;
         };
 
+        // エラー時の自動リカバリー
+        recognition.onerror = (event) => {
+            console.error("Recognition error: " + event.error);
+            if (isRunning) {
+                setTimeout(() => recognition.start(), 500);
+            }
+        };
+
         recognition.onend = () => { 
             if (isRestarting) {
-                // 再起動フラグが立っていれば即座に再開
                 setTimeout(() => recognition.start(), 100); 
             } else if (isRunning) {
-                // 通常終了なら少し待ってから再開
                 setTimeout(() => recognition.start(), 50); 
             } else { 
                 status.innerHTML = '<span style="color:red;">● 停止中</span>'; 
