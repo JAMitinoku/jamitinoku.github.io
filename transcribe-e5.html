@@ -54,15 +54,20 @@
     const sensitivity = document.getElementById('sensitivity');
     const boost = document.getElementById('boost');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition, isRunning = false;
+    
+    let recognition;
+    let isRunning = false;
+    let isRestarting = false; // 再起動フラグ
     let isFocused = false;
 
     output.addEventListener('focus', () => isFocused = true);
     output.addEventListener('blur', () => isFocused = false);
 
+    // 設定変更時の再起動処理をより確実に
     const handleSettingsChange = () => {
         if (isRunning) {
-            recognition.stop();
+            isRestarting = true; // 再起動フラグを立てる
+            recognition.stop();  // 止める
         }
     };
     sensitivity.addEventListener('change', handleSettingsChange);
@@ -74,7 +79,11 @@
         recognition.interimResults = true;
         recognition.continuous = true;
 
-        recognition.onstart = () => { status.innerHTML = '<span style="color:green;">● 認識中</span>'; isRunning = true; };
+        recognition.onstart = () => { 
+            status.innerHTML = '<span style="color:green;">● 認識中</span>'; 
+            isRunning = true; 
+            isRestarting = false; // 起動したらフラグを下ろす
+        };
 
         recognition.onresult = (event) => {
             let finalTranscript = '';
@@ -115,7 +124,11 @@
         };
 
         recognition.onend = () => { 
-            if (isRunning) {
+            if (isRestarting) {
+                // 再起動フラグが立っていれば即座に再開
+                setTimeout(() => recognition.start(), 100); 
+            } else if (isRunning) {
+                // 通常終了なら少し待ってから再開
                 setTimeout(() => recognition.start(), 50); 
             } else { 
                 status.innerHTML = '<span style="color:red;">● 停止中</span>'; 
