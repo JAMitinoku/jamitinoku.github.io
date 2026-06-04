@@ -44,8 +44,11 @@
     const interim = document.getElementById('interim');
     const status = document.getElementById('status');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
-    let isRunning = false;
+    let recognition, isRunning = false;
+    let isFocused = false;
+
+    output.addEventListener('focus', () => isFocused = true);
+    output.addEventListener('blur', () => isFocused = false);
 
     function initRecognition() {
         recognition = new SpeechRecognition();
@@ -53,15 +56,11 @@
         recognition.interimResults = true;
         recognition.continuous = true;
 
-        recognition.onstart = () => {
-            status.innerHTML = '<span style="color:green;">● 認識中</span>';
-            isRunning = true;
-        };
+        recognition.onstart = () => { status.innerHTML = '<span style="color:green;">● 認識中</span>'; isRunning = true; };
 
         recognition.onresult = (event) => {
             let finalTranscript = '';
             let interimTranscript = '';
-            
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     let text = event.results[i][0].transcript.trim();
@@ -73,37 +72,30 @@
             }
             
             if (finalTranscript) {
-                const isAtBottom = (output.scrollHeight - output.scrollTop <= output.clientHeight + 10);
+                // キャレット保持の秘策：フォーカスしてコマンドを実行する
+                output.focus();
+                // 末尾に改行が必要か判定
+                let textToInsert = (output.value.length > 0 && !output.value.endsWith("\n")) ? "\n" + finalTranscript : finalTranscript;
                 
-                // 空行対策：現在の末尾に改行がなければ付与してから追加
-                let currentVal = output.value;
-                if (currentVal.length > 0 && !currentVal.endsWith("\n")) {
-                    output.value += "\n";
-                }
-                output.value += finalTranscript.replace(/\n+$/, "\n");
+                // ブラウザのネイティブ挿入コマンドを利用
+                document.execCommand('insertText', false, textToInsert);
                 
-                // オートスクロール：書き込み後に強制的に一番下へ
-                if (isAtBottom) {
+                // 編集中の場合はスクロールさせない
+                if (!isFocused) {
                     output.scrollTop = output.scrollHeight;
                 }
             }
             interim.innerText = interimTranscript;
         };
 
-        recognition.onend = () => {
-            if (isRunning) {
-                setTimeout(() => recognition.start(), 50);
-            } else {
-                status.innerHTML = '<span style="color:red;">● 停止中</span>';
-            }
-        };
+        recognition.onend = () => { if (isRunning) setTimeout(() => recognition.start(), 50); else status.innerHTML = '<span style="color:red;">● 停止中</span>'; };
     }
 
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
     document.getElementById('stopBtn').onclick = () => { isRunning = false; recognition.stop(); };
-    document.getElementById('clearBtn').onclick = () => { output.value = ""; interim.innerText = ""; };
+    document.getElementById('clearBtn').onclick = () => { output.value = ""; };
     document.getElementById('copyBtn').onclick = () => { output.select(); document.execCommand('copy'); };
-    document.getElementById('resetBtn').onclick = () => { location.reload(); };
+    document.getElementById('resetBtn').onclick = () => location.reload();
     document.getElementById('saveBtn').onclick = () => {
         const blob = new Blob([output.value], {type: 'text/plain'});
         const a = document.createElement('a');
