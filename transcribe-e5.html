@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音声認識ツール - スクロール保持版</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; height: 98vh; margin: 0; padding: 10px; box-sizing: border-box; }
+        .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
+        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; margin-bottom: 5px;}
+        #interim { height: 50px; border: 1px solid #ddd; background: #fff; padding: 5px; color: #888; overflow-y: auto; font-size: 14px; }
+        .status { padding: 5px; font-size: 0.9em; color: #555; }
+        button { cursor: pointer; padding: 5px 15px; }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <button id="startBtn">開始</button>
+    <button id="stopBtn">停止</button>
+    <button id="clearBtn">クリア</button>
+    <button id="saveBtn">保存</button>
+    <button id="copyBtn">コピー</button>
+    <button id="resetBtn">デバイスリセット</button>
+    <select id="deviceSelect"><option>音声入力: 既定</option></select>
+    <select id="sensitivity">
+        <option value="0.9">最高感度</option>
+        <option value="0.5" selected>通常</option>
+        <option value="0.2">低め</option>
+    </select>
+    <select id="boost">
+        <option value="1">ブースト 1</option>
+        <option value="50" selected>ブースト 50</option>
+        <option value="100">ブースト 100</option>
+    </select>
+    <div id="status" class="status">● 待機中</div>
+</div>
+
+<textarea id="output" placeholder="確定した文章がここに溜まります。編集可能です。"></textarea>
+<div id="interim" placeholder="未確定のテキストがここに表示されます..."></div>
+
+<script>
+    const output = document.getElementById('output');
+    const interim = document.getElementById('interim');
+    const status = document.getElementById('status');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+    let isRunning = false;
+
+    function initRecognition() {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ja-JP';
+        recognition.interimResults = true; 
+        recognition.continuous = true;
+
+        recognition.onstart = () => {
+            status.innerHTML = '<span style="color:green;">● 認識中</span>';
+            isRunning = true;
+        };
+
+        recognition.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    let text = event.results[i][0].transcript.trim();
+                    if (text && !/[。、！？]$/.test(text)) text += "。";
+                    finalTranscript += text + "\n";
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+            
+            if (finalTranscript) {
+                const startPos = output.selectionStart;
+                const endPos = output.selectionEnd;
+                const isAtEnd = (startPos === output.value.length);
+                
+                output.value += finalTranscript;
+                
+                // 追記した際、元々末尾にカーソルがあった場合のみ追従スクロールする
+                if (isAtEnd) {
+                    output.scrollTop = output.scrollHeight;
+                }
+                
+                output.setSelectionRange(startPos, endPos);
+            }
+            interim.innerText = interimTranscript;
+        };
+
+        recognition.onend = () => {
+            if (isRunning) {
+                setTimeout(() => recognition.start(), 50);
+            } else {
+                status.innerHTML = '<span style="color:red;">● 停止中</span>';
+            }
+        };
+    }
+
+    document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
+    document.getElementById('stopBtn').onclick = () => { isRunning = false; recognition.stop(); };
+    document.getElementById('clearBtn').onclick = () => { output.value = ""; interim.innerText = ""; };
+    document.getElementById('copyBtn').onclick = () => { output.select(); document.execCommand('copy'); alert("コピーしました"); };
+    document.getElementById('resetBtn').onclick = () => { location.reload(); };
+    document.getElementById('saveBtn').onclick = () => {
+        const blob = new Blob([output.value], {type: 'text/plain'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'memo.txt';
+        a.click();
+    };
+
+    initRecognition();
+</script>
+</body>
+</html>
