@@ -72,16 +72,23 @@
             }
             
             if (finalTranscript) {
-                // キャレット保持の秘策：フォーカスしてコマンドを実行する
+                // 1. 現在のキャレット位置を保存
+                const currentStart = output.selectionStart;
+                const currentEnd = output.selectionEnd;
+                const currentScroll = output.scrollTop;
+
+                // 2. 一旦キャレットを末尾へ移動して挿入
                 output.focus();
-                // 末尾に改行が必要か判定
-                let textToInsert = (output.value.length > 0 && !output.value.endsWith("\n")) ? "\n" + finalTranscript : finalTranscript;
+                output.setSelectionRange(output.value.length, output.value.length);
                 
-                // ブラウザのネイティブ挿入コマンドを利用
+                let textToInsert = (output.value.length > 0 && !output.value.endsWith("\n")) ? "\n" + finalTranscript : finalTranscript;
                 document.execCommand('insertText', false, textToInsert);
                 
-                // 編集中の場合はスクロールさせない
-                if (!isFocused) {
+                // 3. 編集中の場合のみ、キャレットを元の位置へ戻す
+                if (isFocused) {
+                    output.setSelectionRange(currentStart, currentEnd);
+                    output.scrollTop = currentScroll;
+                } else {
                     output.scrollTop = output.scrollHeight;
                 }
             }
