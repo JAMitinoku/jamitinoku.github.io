@@ -29,12 +29,12 @@
         <option value="0.2">低め</option>
     </select>
     <select id="boost">
-        <option value="0">ブースト なし</option>
+        <option value="0" selected>ブースト なし</option>
         <option value="10">ブースト 10</option>
         <option value="20">ブースト 20</option>
         <option value="30">ブースト 30</option>
         <option value="40">ブースト 40</option>
-        <option value="50" selected>ブースト 50</option>
+        <option value="50">ブースト 50</option>
         <option value="60">ブースト 60</option>
         <option value="70">ブースト 70</option>
         <option value="80">ブースト 80</option>
@@ -78,7 +78,6 @@
         recognition.interimResults = true;
         recognition.continuous = true;
 
-        // Chromeの音声入力維持のための工夫
         recognition.onstart = () => { 
             status.innerHTML = '<span style="color:green;">● 認識中</span>'; 
             isRunning = true; 
@@ -123,9 +122,7 @@
             interim.innerText = interimTranscript;
         };
 
-        // エラー時の自動リカバリー
         recognition.onerror = (event) => {
-            console.error("Recognition error: " + event.error);
             if (isRunning) {
                 setTimeout(() => recognition.start(), 500);
             }
