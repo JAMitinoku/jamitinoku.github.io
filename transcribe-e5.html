@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声認識ツール - 強制スクロール改修版</title>
+    <title>音声認識ツール - 空行防止版</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 98vh; margin: 0; padding: 10px; box-sizing: border-box; }
         .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
@@ -36,7 +36,7 @@
     <div id="status" class="status">● 待機中</div>
 </div>
 
-<textarea id="output" placeholder="確定した文章がここに溜まります。編集可能です。"></textarea>
+<textarea id="output" placeholder="確定した文章がここに溜まります。"></textarea>
 <div id="interim" placeholder="未確定のテキストがここに表示されます..."></div>
 
 <script>
@@ -75,19 +75,19 @@
             if (finalTranscript) {
                 const startPos = output.selectionStart;
                 const endPos = output.selectionEnd;
-                // テキストエリア全体を選択していないかつ、カーソルが末尾にある場合のみ自動スクロール
                 const isAtEnd = (startPos === output.value.length);
                 
-                output.value += finalTranscript;
+                // 空行を発生させないための処理
+                // 現在のテキストの末尾に既に改行があるか確認し、あれば付け足さない
+                let currentText = output.value;
+                if (currentText.length > 0 && !currentText.endsWith('\n')) {
+                    output.value += '\n';
+                }
+                output.value += finalTranscript.trim();
                 
                 if (isAtEnd) {
-                    // スクロールを強制実行
-                    output.scrollTo({
-                        top: output.scrollHeight,
-                        behavior: 'auto'
-                    });
+                    output.scrollTop = output.scrollHeight;
                 }
-                
                 output.setSelectionRange(startPos, endPos);
             }
             interim.innerText = interimTranscript;
@@ -105,10 +105,7 @@
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
     document.getElementById('stopBtn').onclick = () => { isRunning = false; recognition.stop(); };
     document.getElementById('clearBtn').onclick = () => { output.value = ""; interim.innerText = ""; };
-    document.getElementById('copyBtn').onclick = () => { 
-        output.select(); 
-        document.execCommand('copy'); 
-    };
+    document.getElementById('copyBtn').onclick = () => { output.select(); document.execCommand('copy'); };
     document.getElementById('resetBtn').onclick = () => { location.reload(); };
     document.getElementById('saveBtn').onclick = () => {
         const blob = new Blob([output.value], {type: 'text/plain'});
