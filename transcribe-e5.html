@@ -51,26 +51,11 @@
     const output = document.getElementById('output');
     const interim = document.getElementById('interim');
     const status = document.getElementById('status');
-    const sensitivity = document.getElementById('sensitivity');
-    const boost = document.getElementById('boost');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     
     let recognition;
     let isRunning = false;
     let isRestarting = false;
-    let isFocused = false;
-
-    output.addEventListener('focus', () => isFocused = true);
-    output.addEventListener('blur', () => isFocused = false);
-
-    const handleSettingsChange = () => {
-        if (isRunning) {
-            isRestarting = true;
-            recognition.stop();
-        }
-    };
-    sensitivity.addEventListener('change', handleSettingsChange);
-    boost.addEventListener('change', handleSettingsChange);
 
     function initRecognition() {
         recognition = new SpeechRecognition();
@@ -98,29 +83,29 @@
             }
             
             if (finalTranscript) {
-                if (isFocused) {
-                    // 【編集中の場合】
-                    // 現在のカーソル位置に文字を挿入する（元の位置を保持）
-                    const start = output.selectionStart;
-                    const end = output.selectionEnd;
-                    output.value = output.value.slice(0, start) + finalTranscript + output.value.slice(end);
-                    output.setSelectionRange(start + finalTranscript.length, start + finalTranscript.length);
+                // 編集中のカーソル位置を記憶
+                const start = output.selectionStart;
+                const end = output.selectionEnd;
+                const scroll = output.scrollTop;
+
+                // 常に末尾へ追記する
+                let toInsert = finalTranscript;
+                if (output.value.length > 0 && output.value.endsWith("\n") && toInsert.startsWith("\n")) {
+                    toInsert = toInsert.substring(1);
+                }
+                
+                output.value += toInsert;
+
+                // 編集（フォーカス）中であれば、カーソルを元の位置に戻す
+                if (document.activeElement === output) {
+                    output.setSelectionRange(start, end);
+                    output.scrollTop = scroll;
                 } else {
-                    // 【非編集中の場合】
-                    // 末尾に追記し、オートスクロールを有効にする
-                    if (output.value.length > 0 && output.value.endsWith("\n") && finalTranscript.startsWith("\n")) {
-                        output.value += finalTranscript.substring(1);
-                    } else {
-                        output.value += finalTranscript;
-                    }
+                    // フォーカス外なら末尾へスクロール
                     output.scrollTop = output.scrollHeight;
                 }
             }
             interim.innerText = interimTranscript;
-        };
-
-        recognition.onerror = (event) => {
-            if (isRunning) setTimeout(() => recognition.start(), 500);
         };
 
         recognition.onend = () => { 
@@ -132,9 +117,12 @@
         };
     }
 
+    // 設定変更・操作系の処理は維持
+    document.getElementById('sensitivity').addEventListener('change', () => { if(isRunning) { isRestarting=true; recognition.stop(); }});
+    document.getElementById('boost').addEventListener('change', () => { if(isRunning) { isRestarting=true; recognition.stop(); }});
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
     document.getElementById('stopBtn').onclick = () => { isRunning = false; recognition.stop(); };
-    document.getElementById('clearBtn').onclick = () => { output.value = ""; };
+    document.getElementById('clearBtn').onclick = () => output.value = "";
     document.getElementById('copyBtn').onclick = () => { output.select(); document.execCommand('copy'); };
     document.getElementById('resetBtn').onclick = () => location.reload();
     document.getElementById('saveBtn').onclick = () => {
