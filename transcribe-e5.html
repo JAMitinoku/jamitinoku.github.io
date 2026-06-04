@@ -76,36 +76,37 @@
                 if (event.results[i].isFinal) {
                     let text = event.results[i][0].transcript.trim();
                     if (text && !/[。、！？]$/.test(text)) text += "。";
-                    finalTranscript += text + "\n";
+                    finalTranscript += text;
                 } else {
                     interimTranscript += event.results[i][0].transcript;
                 }
             }
             
             if (finalTranscript) {
-                // 編集中のカーソル位置を記憶
                 const start = output.selectionStart;
                 const end = output.selectionEnd;
                 const scroll = output.scrollTop;
 
-                // 常に末尾へ追記する
-                let toInsert = finalTranscript;
-                if (output.value.length > 0 && output.value.endsWith("\n") && toInsert.startsWith("\n")) {
-                    toInsert = toInsert.substring(1);
-                }
+                // 末尾に改行がない場合のみ改行を付与して連結
+                const textToAppend = (output.value.length > 0 && !output.value.endsWith("\n")) 
+                                     ? "\n" + finalTranscript + "\n" 
+                                     : finalTranscript + "\n";
                 
-                output.value += toInsert;
+                output.value += textToAppend;
 
-                // 編集（フォーカス）中であれば、カーソルを元の位置に戻す
+                // 編集中のカーソル位置を保持
                 if (document.activeElement === output) {
                     output.setSelectionRange(start, end);
                     output.scrollTop = scroll;
                 } else {
-                    // フォーカス外なら末尾へスクロール
                     output.scrollTop = output.scrollHeight;
                 }
             }
             interim.innerText = interimTranscript;
+        };
+
+        recognition.onerror = (event) => {
+            if (isRunning) setTimeout(() => recognition.start(), 500);
         };
 
         recognition.onend = () => { 
@@ -117,7 +118,6 @@
         };
     }
 
-    // 設定変更・操作系の処理は維持
     document.getElementById('sensitivity').addEventListener('change', () => { if(isRunning) { isRestarting=true; recognition.stop(); }});
     document.getElementById('boost').addEventListener('change', () => { if(isRunning) { isRestarting=true; recognition.stop(); }});
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
