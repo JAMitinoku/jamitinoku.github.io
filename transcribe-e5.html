@@ -98,23 +98,21 @@
             }
             
             if (finalTranscript) {
-                const val = output.value;
-                const start = output.selectionStart;
-                const end = output.selectionEnd;
-                
-                // 空行対策：末尾に改行があるかを確認し、重複を避ける
-                let toInsert = finalTranscript;
-                if (val.length > 0 && val.endsWith("\n") && toInsert.startsWith("\n")) {
-                    toInsert = toInsert.substring(1);
-                }
-
-                // 物理的な値の書き換えのみを行う
-                output.value = val.slice(0, val.length) + toInsert;
-                
-                // 編集中の場合はカーソル位置を維持
                 if (isFocused) {
-                    output.setSelectionRange(start, end);
+                    // 【編集中の場合】
+                    // 現在のカーソル位置に文字を挿入する（元の位置を保持）
+                    const start = output.selectionStart;
+                    const end = output.selectionEnd;
+                    output.value = output.value.slice(0, start) + finalTranscript + output.value.slice(end);
+                    output.setSelectionRange(start + finalTranscript.length, start + finalTranscript.length);
                 } else {
+                    // 【非編集中の場合】
+                    // 末尾に追記し、オートスクロールを有効にする
+                    if (output.value.length > 0 && output.value.endsWith("\n") && finalTranscript.startsWith("\n")) {
+                        output.value += finalTranscript.substring(1);
+                    } else {
+                        output.value += finalTranscript;
+                    }
                     output.scrollTop = output.scrollHeight;
                 }
             }
