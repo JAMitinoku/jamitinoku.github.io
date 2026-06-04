@@ -29,8 +29,16 @@
         <option value="0.2">低め</option>
     </select>
     <select id="boost">
-        <option value="1">ブースト 1</option>
+        <option value="0">ブースト なし</option>
+        <option value="10">ブースト 10</option>
+        <option value="20">ブースト 20</option>
+        <option value="30">ブースト 30</option>
+        <option value="40">ブースト 40</option>
         <option value="50" selected>ブースト 50</option>
+        <option value="60">ブースト 60</option>
+        <option value="70">ブースト 70</option>
+        <option value="80">ブースト 80</option>
+        <option value="90">ブースト 90</option>
         <option value="100">ブースト 100</option>
     </select>
     <div id="status" class="status">● 待機中</div>
@@ -52,10 +60,9 @@
     output.addEventListener('focus', () => isFocused = true);
     output.addEventListener('blur', () => isFocused = false);
 
-    // 設定変更時の再起動処理
     const handleSettingsChange = () => {
         if (isRunning) {
-            recognition.stop(); // 停止させ、onend経由で再開させる
+            recognition.stop();
         }
     };
     sensitivity.addEventListener('change', handleSettingsChange);
