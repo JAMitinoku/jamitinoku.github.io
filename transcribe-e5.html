@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声認識ツール - スクロール保持版</title>
+    <title>音声認識ツール - 強制スクロール改修版</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 98vh; margin: 0; padding: 10px; box-sizing: border-box; }
         .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
-        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; margin-bottom: 5px;}
+        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; margin-bottom: 5px; overflow-y: auto;}
         #interim { height: 50px; border: 1px solid #ddd; background: #fff; padding: 5px; color: #888; overflow-y: auto; font-size: 14px; }
         .status { padding: 5px; font-size: 0.9em; color: #555; }
         button { cursor: pointer; padding: 5px 15px; }
@@ -75,13 +75,17 @@
             if (finalTranscript) {
                 const startPos = output.selectionStart;
                 const endPos = output.selectionEnd;
+                // テキストエリア全体を選択していないかつ、カーソルが末尾にある場合のみ自動スクロール
                 const isAtEnd = (startPos === output.value.length);
                 
                 output.value += finalTranscript;
                 
-                // 追記した際、元々末尾にカーソルがあった場合のみ追従スクロールする
                 if (isAtEnd) {
-                    output.scrollTop = output.scrollHeight;
+                    // スクロールを強制実行
+                    output.scrollTo({
+                        top: output.scrollHeight,
+                        behavior: 'auto'
+                    });
                 }
                 
                 output.setSelectionRange(startPos, endPos);
@@ -101,7 +105,10 @@
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
     document.getElementById('stopBtn').onclick = () => { isRunning = false; recognition.stop(); };
     document.getElementById('clearBtn').onclick = () => { output.value = ""; interim.innerText = ""; };
-    document.getElementById('copyBtn').onclick = () => { output.select(); document.execCommand('copy'); alert("コピーしました"); };
+    document.getElementById('copyBtn').onclick = () => { 
+        output.select(); 
+        document.execCommand('copy'); 
+    };
     document.getElementById('resetBtn').onclick = () => { location.reload(); };
     document.getElementById('saveBtn').onclick = () => {
         const blob = new Blob([output.value], {type: 'text/plain'});
