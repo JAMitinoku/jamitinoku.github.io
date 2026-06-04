@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声認識ツール - 空行防止版</title>
+    <title>音声認識ツール - 最終スクロール修正版</title>
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 98vh; margin: 0; padding: 10px; box-sizing: border-box; }
         .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
-        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; margin-bottom: 5px; overflow-y: auto;}
+        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; margin-bottom: 5px; overflow-y: scroll;}
         #interim { height: 50px; border: 1px solid #ddd; background: #fff; padding: 5px; color: #888; overflow-y: auto; font-size: 14px; }
         .status { padding: 5px; font-size: 0.9em; color: #555; }
         button { cursor: pointer; padding: 5px 15px; }
@@ -75,19 +75,17 @@
             if (finalTranscript) {
                 const startPos = output.selectionStart;
                 const endPos = output.selectionEnd;
-                const isAtEnd = (startPos === output.value.length);
+                const isAtEnd = (startPos >= output.value.length - 1);
                 
-                // 空行を発生させないための処理
-                // 現在のテキストの末尾に既に改行があるか確認し、あれば付け足さない
-                let currentText = output.value;
-                if (currentText.length > 0 && !currentText.endsWith('\n')) {
-                    output.value += '\n';
-                }
-                output.value += finalTranscript.trim();
+                output.value += finalTranscript;
                 
+                // 編集中でなければ、次の描画タイミングで強制的に末尾へスクロール
                 if (isAtEnd) {
-                    output.scrollTop = output.scrollHeight;
+                    setTimeout(() => {
+                        output.scrollTop = output.scrollHeight;
+                    }, 0);
                 }
+                
                 output.setSelectionRange(startPos, endPos);
             }
             interim.innerText = interimTranscript;
