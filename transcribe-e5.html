@@ -43,12 +43,23 @@
     const output = document.getElementById('output');
     const interim = document.getElementById('interim');
     const status = document.getElementById('status');
+    const sensitivity = document.getElementById('sensitivity');
+    const boost = document.getElementById('boost');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition, isRunning = false;
     let isFocused = false;
 
     output.addEventListener('focus', () => isFocused = true);
     output.addEventListener('blur', () => isFocused = false);
+
+    // 設定変更時の再起動処理
+    const handleSettingsChange = () => {
+        if (isRunning) {
+            recognition.stop(); // 停止させ、onend経由で再開させる
+        }
+    };
+    sensitivity.addEventListener('change', handleSettingsChange);
+    boost.addEventListener('change', handleSettingsChange);
 
     function initRecognition() {
         recognition = new SpeechRecognition();
@@ -76,11 +87,9 @@
                 const currentEnd = output.selectionEnd;
                 const currentScroll = output.scrollTop;
 
-                // 末尾へ移動
                 output.focus();
                 output.setSelectionRange(output.value.length, output.value.length);
                 
-                // 空行対策：末尾がすでに改行なら、挿入テキストから先頭の改行を除去
                 let textToInsert = finalTranscript;
                 if (output.value.length > 0 && output.value.endsWith("\n")) {
                     textToInsert = textToInsert.replace(/^\n+/, "");
@@ -88,7 +97,6 @@
                 
                 document.execCommand('insertText', false, textToInsert);
                 
-                // 編集中の場合のみ位置復元
                 if (isFocused) {
                     output.setSelectionRange(currentStart, currentEnd);
                     output.scrollTop = currentScroll;
@@ -99,7 +107,13 @@
             interim.innerText = interimTranscript;
         };
 
-        recognition.onend = () => { if (isRunning) setTimeout(() => recognition.start(), 50); else status.innerHTML = '<span style="color:red;">● 停止中</span>'; };
+        recognition.onend = () => { 
+            if (isRunning) {
+                setTimeout(() => recognition.start(), 50); 
+            } else { 
+                status.innerHTML = '<span style="color:red;">● 停止中</span>'; 
+            }
+        };
     }
 
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
