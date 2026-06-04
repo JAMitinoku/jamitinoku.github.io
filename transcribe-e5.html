@@ -98,23 +98,22 @@
             }
             
             if (finalTranscript) {
-                const currentStart = output.selectionStart;
-                const currentEnd = output.selectionEnd;
-                const currentScroll = output.scrollTop;
-
-                output.focus();
-                output.setSelectionRange(output.value.length, output.value.length);
+                const val = output.value;
+                const start = output.selectionStart;
+                const end = output.selectionEnd;
                 
-                let textToInsert = finalTranscript;
-                if (output.value.length > 0 && output.value.endsWith("\n")) {
-                    textToInsert = textToInsert.replace(/^\n+/, "");
+                // 空行対策：末尾に改行があるかを確認し、重複を避ける
+                let toInsert = finalTranscript;
+                if (val.length > 0 && val.endsWith("\n") && toInsert.startsWith("\n")) {
+                    toInsert = toInsert.substring(1);
                 }
+
+                // 物理的な値の書き換えのみを行う
+                output.value = val.slice(0, val.length) + toInsert;
                 
-                document.execCommand('insertText', false, textToInsert);
-                
+                // 編集中の場合はカーソル位置を維持
                 if (isFocused) {
-                    output.setSelectionRange(currentStart, currentEnd);
-                    output.scrollTop = currentScroll;
+                    output.setSelectionRange(start, end);
                 } else {
                     output.scrollTop = output.scrollHeight;
                 }
@@ -123,16 +122,12 @@
         };
 
         recognition.onerror = (event) => {
-            if (isRunning) {
-                setTimeout(() => recognition.start(), 500);
-            }
+            if (isRunning) setTimeout(() => recognition.start(), 500);
         };
 
         recognition.onend = () => { 
-            if (isRestarting) {
+            if (isRestarting || isRunning) {
                 setTimeout(() => recognition.start(), 100); 
-            } else if (isRunning) {
-                setTimeout(() => recognition.start(), 50); 
             } else { 
                 status.innerHTML = '<span style="color:red;">● 停止中</span>'; 
             }
