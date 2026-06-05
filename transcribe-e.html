@@ -242,7 +242,7 @@
         // フィラー削除チェックボックスがONの時のみ削除を実行
         if (document.getElementById('filler-filter').checked) {
             const fillerRegex = /^(ええ｜ええ、｜えーと|えーっと|えー、|あのー|あの、|えー|あの|まあ｜まー|うーん)/g;
-            cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
+            cleanedText = cleanedText.replace(fillerRegex, "").replace(/[、\s](ええ｜まあ｜えーと|えーっと|えー、|あのー|あの、|えー|あの)[、\s]?/g, " ").trim();
             if (cleanedText === "") return;
         }
 
