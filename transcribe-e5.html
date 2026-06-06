@@ -7,8 +7,8 @@
     <style>
         body { font-family: sans-serif; display: flex; flex-direction: column; height: 98vh; margin: 0; padding: 10px; box-sizing: border-box; }
         .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
-        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; margin-bottom: 5px; overflow-y: auto;}
-        #interim { height: 50px; border: 1px solid #ddd; background: #fff; padding: 5px; color: #888; overflow-y: auto; font-size: 14px; }
+        #interim { height: 60px; border: 1px solid #ddd; background: #fff; padding: 5px; color: #555; overflow-y: auto; font-size: 16px; margin-bottom: 5px; }
+        #output { flex-grow: 1; border: 1px solid #999; padding: 15px; width: 100%; box-sizing: border-box; font-size: 16px; line-height: 1.6; resize: none; overflow-y: auto;}
         .status { padding: 5px; font-size: 0.9em; color: #555; }
         button { cursor: pointer; padding: 5px 15px; }
     </style>
@@ -22,30 +22,11 @@
     <button id="saveBtn">保存</button>
     <button id="copyBtn">コピー</button>
     <button id="resetBtn">デバイスリセット</button>
-    <select id="deviceSelect"><option>音声入力: 既定</option></select>
-    <select id="sensitivity">
-        <option value="0.9">最高感度</option>
-        <option value="0.5" selected>通常</option>
-        <option value="0.2">低め</option>
-    </select>
-    <select id="boost">
-        <option value="0" selected>ブースト なし</option>
-        <option value="10">ブースト 10</option>
-        <option value="20">ブースト 20</option>
-        <option value="30">ブースト 30</option>
-        <option value="40">ブースト 40</option>
-        <option value="50">ブースト 50</option>
-        <option value="60">ブースト 60</option>
-        <option value="70">ブースト 70</option>
-        <option value="80">ブースト 80</option>
-        <option value="90">ブースト 90</option>
-        <option value="100">ブースト 100</option>
-    </select>
     <div id="status" class="status">● 待機中</div>
 </div>
 
-<textarea id="output" placeholder="確定した文章がここに溜まります。"></textarea>
 <div id="interim" placeholder="未確定のテキストがここに表示されます..."></div>
+<textarea id="output" placeholder="確定した文章がここに溜まります。"></textarea>
 
 <script>
     const output = document.getElementById('output');
@@ -55,7 +36,6 @@
     
     let recognition;
     let isRunning = false;
-    let isRestarting = false;
 
     function initRecognition() {
         recognition = new SpeechRecognition();
@@ -65,61 +45,32 @@
 
         recognition.onstart = () => { 
             status.innerHTML = '<span style="color:green;">● 認識中</span>'; 
-            isRunning = true; 
-            isRestarting = false; 
         };
 
         recognition.onresult = (event) => {
-            let finalTranscript = '';
             let interimTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    let text = event.results[i][0].transcript.trim();
-                    if (text && !/[。、！？]$/.test(text)) text += "。";
-                    finalTranscript += text;
+                    output.value += event.results[i][0].transcript + "\n";
+                    output.scrollTop = output.scrollHeight;
                 } else {
                     interimTranscript += event.results[i][0].transcript;
-                }
-            }
-            
-            if (finalTranscript) {
-                const start = output.selectionStart;
-                const end = output.selectionEnd;
-                const scroll = output.scrollTop;
-
-                // 末尾に改行がない場合のみ改行を付与して連結
-                const textToAppend = (output.value.length > 0 && !output.value.endsWith("\n")) 
-                                     ? "\n" + finalTranscript + "\n" 
-                                     : finalTranscript + "\n";
-                
-                output.value += textToAppend;
-
-                // 編集中のカーソル位置を保持
-                if (document.activeElement === output) {
-                    output.setSelectionRange(start, end);
-                    output.scrollTop = scroll;
-                } else {
-                    output.scrollTop = output.scrollHeight;
                 }
             }
             interim.innerText = interimTranscript;
         };
 
-        recognition.onerror = (event) => {
-            if (isRunning) setTimeout(() => recognition.start(), 500);
-        };
-
+        // 停止ボタン押下時はisRunningがfalseになっているため、再起動させない
+        recognition.onerror = () => { if (isRunning) recognition.start(); };
         recognition.onend = () => { 
-            if (isRestarting || isRunning) {
-                setTimeout(() => recognition.start(), 100); 
-            } else { 
-                status.innerHTML = '<span style="color:red;">● 停止中</span>'; 
+            if (isRunning) {
+                recognition.start(); 
+            } else {
+                status.innerHTML = '<span style="color:red;">● 停止中</span>';
             }
         };
     }
 
-    document.getElementById('sensitivity').addEventListener('change', () => { if(isRunning) { isRestarting=true; recognition.stop(); }});
-    document.getElementById('boost').addEventListener('change', () => { if(isRunning) { isRestarting=true; recognition.stop(); }});
     document.getElementById('startBtn').onclick = () => { isRunning = true; recognition.start(); };
     document.getElementById('stopBtn').onclick = () => { isRunning = false; recognition.stop(); };
     document.getElementById('clearBtn').onclick = () => output.value = "";
