@@ -2,117 +2,116 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>最終完成版 文字起こしツール</title>
+    <title>音声認識ツール (Edge最適化版)</title>
     <style>
-        :root { --bg-color: #f1f3f5; --card-bg: #ffffff; --text-color: #212529; --border-color: #ced4da; --success: #28a745; --danger: #dc3545; --secondary: #6c757d; }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-        body, html { height: 100dvh; background-color: var(--bg-color); overflow: hidden; }
-        .container { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; padding: 10px; gap: 10px; }
-        /* デバイス表示用スタイル追加 */
-        .device-info { font-size: 0.8rem; color: #666; background: #fff; padding: 5px; border-radius: 4px; border: 1px solid var(--border-color); margin-bottom: 5px; }
-        .header { display: flex; gap: 10px; align-items: center; }
-        .status-badge { padding: 5px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; background: #e9ecef; }
-        #resultTextarea { flex: 1; width: 100%; padding: 15px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem; resize: none; background: var(--card-bg); outline: none; }
-        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .sub-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
-        button { padding: 12px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
-        .btn-start { background-color: var(--success); }
-        .btn-stop { background-color: var(--danger); }
-        .btn-sub { background-color: var(--secondary); font-size: 0.9rem; }
+        body { font-family: sans-serif; height: 98vh; display: flex; flex-direction: column; padding: 10px; box-sizing: border-box; }
+        .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
+        #interim { height: 50px; border: 1px solid #ddd; background: #fff; padding: 8px; color: #666; overflow-y: auto; margin-bottom: 10px; }
+        #output { flex-grow: 1; border: 1px solid #999; padding: 10px; width: 100%; box-sizing: border-box; font-size: 16px; white-space: pre-wrap; background-color: #fff; }
+        #output:read-only { background-color: #f9f9f9; color: #333; }
+        .status { font-weight: bold; color: #333; margin-left: 10px; }
+        .control-group { display: flex; align-items: center; gap: 5px; font-size: 14px; }
+        select { padding: 4px; }
+        button { padding: 8px 16px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="deviceDisplay" class="device-info">入力デバイス: 未接続</div>
-        <div class="header">
-            <div id="statusBadge" class="status-badge">待機中</div>
-            <select id="boostSelect" style="padding:5px">
-                <option value="1.0">通常モード</option>
-                <option value="1.5">高感度（即応）</option>
-                <option value="2.0">長文安定（推奨）</option>
-            </select>
-        </div>
-        <textarea id="resultTextarea" readonly></textarea>
-        <div class="controls">
-            <button id="btnStart" class="btn-start">開始</button>
-            <button id="btnStop" class="btn-stop" disabled>停止</button>
-        </div>
-        <div class="sub-controls">
-            <button id="btnCopy" class="btn-sub">コピー</button>
-            <button id="btnSave" class="btn-sub">保存</button>
-            <button id="btnClear" class="btn-sub">消去</button>
-        </div>
+
+<div class="toolbar">
+    <button id="startBtn">開始</button>
+    <button id="stopBtn">停止</button>
+    <button id="clearBtn">クリア</button>
+    <button id="copyBtn">コピー</button>
+    <button id="saveBtn">保存</button>
+    <span id="status" class="status">● 停止中</span>
+    
+    <div class="control-group">
+        <label>感度設定:</label>
+        <select id="sensitivity">
+            <option value="50">低感度 (50%)</option>
+            <option value="100" selected>標準 (100%)</option>
+            <option value="150">高感度 (150%)</option>
+            <option value="200">最大ブースト (200%)</option>
+        </select>
     </div>
+</div>
+
+<div id="interim"></div>
+<textarea id="output" placeholder="ここにテキストが表示されます。停止中は直接編集可能です。"></textarea>
 
 <script>
+    const output = document.getElementById('output');
+    const interim = document.getElementById('interim');
+    const status = document.getElementById('status');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition = null;
+    
+    const recognition = new SpeechRecognition();
     let isRunning = false;
-    let finalizedLog = [];
 
-    const textarea = document.getElementById('resultTextarea');
-    const statusBadge = document.getElementById('statusBadge');
-    const boostSelect = document.getElementById('boostSelect');
-    const deviceDisplay = document.getElementById('deviceDisplay');
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true;
+    recognition.continuous = true;
 
-    // デバイス情報を取得して表示する関数
-    async function updateDeviceInfo() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const deviceLabel = stream.getAudioTracks()[0].label;
-            deviceDisplay.innerText = "使用デバイス: " + deviceLabel;
-            // 取得後にストリームを停止してリソースを解放
-            stream.getTracks().forEach(track => track.stop());
-        } catch (err) {
-            deviceDisplay.innerText = "入力デバイス: 取得不可";
-        }
-    }
-
-    function initRecognition() {
-        if (recognition) { recognition.stop(); }
-        recognition = new SpeechRecognition();
-        recognition.lang = 'ja-JP';
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onresult = (e) => {
-            let interimText = "";
-            let newFinals = [];
-
-            for (let i = 0; i < e.results.length; i++) {
-                if (e.results[i].isFinal) {
-                    let text = e.results[i][0].transcript.trim();
-                    if (text && !/[。！？]$/.test(text)) text += "。";
-                    newFinals.push(text);
-                } else {
-                    interimText = e.results[i][0].transcript.trim();
-                }
-            }
-            finalizedLog = [...new Set([...finalizedLog, ...newFinals])];
-            textarea.value = finalizedLog.join("\n") + (interimText ? "\n" + interimText : "");
-            textarea.scrollTop = textarea.scrollHeight;
-        };
-
-        recognition.onstart = () => { isRunning = true; statusBadge.innerText = "認識中..."; statusBadge.style.background = "#d4edda"; };
-        recognition.onend = () => { 
-            if (isRunning) recognition.start(); 
-            else { statusBadge.innerText = "待機中"; statusBadge.style.background = "#e9ecef"; }
-        };
-    }
-
-    document.getElementById('btnStart').onclick = () => { 
-        updateDeviceInfo(); // 開始時にデバイス情報を更新
-        initRecognition(); 
-        recognition.start(); 
-        document.getElementById('btnStart').disabled = true; 
-        document.getElementById('btnStop').disabled = false; 
+    recognition.onstart = () => {
+        status.textContent = '● 認識中';
+        output.readOnly = true; 
     };
 
-    document.getElementById('btnStop').onclick = () => { isRunning = false; if(recognition) recognition.stop(); document.getElementById('btnStart').disabled = false; document.getElementById('btnStop').disabled = true; };
-    document.getElementById('btnClear').onclick = () => { if(confirm("消去しますか？")) { finalizedLog = []; textarea.value = ""; } };
-    document.getElementById('btnCopy').onclick = () => navigator.clipboard.writeText(textarea.value);
-    document.getElementById('btnSave').onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([textarea.value], {type: "text/plain"})); a.download = "記録_" + new Date().getTime() + ".txt"; a.click(); };
+    recognition.onresult = (event) => {
+        let interimText = '';
+        let finalOutput = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                finalOutput += transcript + "\n";
+            } else {
+                interimText += transcript;
+            }
+        }
+        if (finalOutput !== '') {
+            output.value += finalOutput;
+            output.scrollTop = output.scrollHeight;
+        }
+        interim.textContent = interimText;
+    };
+
+    recognition.onend = () => {
+        if (isRunning) {
+            recognition.start();
+        } else {
+            status.textContent = '● 停止中';
+            output.readOnly = false;
+        }
+    };
+
+    document.getElementById('startBtn').onclick = () => {
+        isRunning = true;
+        try { recognition.start(); } catch(e) {}
+    };
+
+    document.getElementById('stopBtn').onclick = () => {
+        isRunning = false;
+        recognition.stop();
+    };
+
+    document.getElementById('clearBtn').onclick = () => {
+        output.value = "";
+        interim.textContent = "";
+    };
+
+    document.getElementById('copyBtn').onclick = () => {
+        navigator.clipboard.writeText(output.value).then(() => {
+            alert("コピーしました");
+        });
+    };
+
+    document.getElementById('saveBtn').onclick = () => {
+        const blob = new Blob([output.value], {type: 'text/plain'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'memo.txt';
+        a.click();
+    };
 </script>
 </body>
 </html>
