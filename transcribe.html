@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>音声認識ツール (Edge最適化版)</title>
+    <title>音声認識ツール (Edge最適化・自動復旧版)</title>
     <style>
         body { font-family: sans-serif; height: 98vh; display: flex; flex-direction: column; padding: 10px; box-sizing: border-box; }
         .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; background: #eee; padding: 10px; border-radius: 5px; align-items: center; }
@@ -47,6 +47,7 @@
     
     const recognition = new SpeechRecognition();
     let isRunning = false;
+    let lastResultTime = Date.now();
 
     recognition.lang = 'ja-JP';
     recognition.interimResults = true;
@@ -55,9 +56,11 @@
     recognition.onstart = () => {
         status.textContent = '● 認識中';
         output.readOnly = true; 
+        lastResultTime = Date.now();
     };
 
     recognition.onresult = (event) => {
+        lastResultTime = Date.now();
         let interimText = '';
         let finalOutput = '';
         for (let i = event.resultIndex; i < event.results.length; ++i) {
@@ -74,6 +77,14 @@
         }
         interim.textContent = interimText;
     };
+
+    // 【自動復旧タイマー】7秒間反応がない場合は強制再起動
+    setInterval(() => {
+        if (isRunning && (Date.now() - lastResultTime > 5000)) {
+            console.log("無反応検知: 7秒経過したため再起動します");
+            recognition.stop(); 
+        }
+    }, 2000);
 
     recognition.onend = () => {
         if (isRunning) {
