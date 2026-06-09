@@ -67,8 +67,13 @@
         finalArea.contentEditable = "false";
     };
 
+    // エラー発生時も再接続ループを維持
+    recognition.onerror = (event) => {
+        console.error('Recognition error: ' + event.error);
+    };
+
     recognition.onend = () => {
-        // 自動再接続
+        // 自動再接続（拾い続けるためのループ処理）
         if (isRecognizing) {
             recognition.start();
         } else {
