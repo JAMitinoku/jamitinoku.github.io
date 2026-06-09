@@ -25,7 +25,7 @@ const cmsData = {
       id: 2,
       date: "2026年06月09日",
       category: "管理",
-      title: "【Edge推奨】文字起こし（編集対応）",
+      title: "【Chrome/Edge】文字起こし（編集対応）",
       content: "",
       url: "https://jamitinoku.github.io/transcribe-g.html" // ← リンクがない場合は空欄にするだけ
     },
