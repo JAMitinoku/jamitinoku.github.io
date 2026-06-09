@@ -86,7 +86,6 @@
                 // 確定データ処理
                 let transcript = event.results[i][0].transcript.trim();
                 if (transcript) {
-                    // 空白除去、句読点自動付与（ブラウザエンジンに依存）
                     finalTrans += transcript + '\n';
                 }
             } else {
