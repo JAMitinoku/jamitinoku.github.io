@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>音声認識エディタ</title>
+    <style>
+        /*===== リセット・基本 ===== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent; /* タップ時の青枠を除去 */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh; /* 仮想キーボード考慮の動的ビューポート */
+            background: #1a1a2e;
+            color: #eee;
+            overflow: hidden;
+        }
+
+        /* ===== ステータスバー ===== */
+        #status-bar {
+            background: #16213e;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85em;
+            border-bottom: 1px solid #0f3460;
+            min-height: 40px;
+            flex-shrink: 0;
+        }
+
+        #status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #e74c3c;
+            flex-shrink: 0;transition: background 0.3s;box-shadow: 0 0 0 0rgba(231, 76, 60, 0);
+        }
+
+        /*録音中アニメーション */
+        #status-dot.recording {
+            background: #2ecc71;
+            animation: pulse 1.4s infinite;
+            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+        }
+
+        @keyframes pulse {
+            0%{ box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+            70%  { box-shadow: 0 0 0 8px rgba(46, 204, 113, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+        }
+
+        #status-text {
+            font-size: 0.85em;
+            color: #aaa;
+            flex: 1;
+        }
+
+        /* ===== コントロールエリア ===== */
+        #controls {
+            background: #16213e;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 2px solid #0f3460;
+            flex-shrink: 0;
+        }
+
+        /* メインボタン行（開始・停止を大きく） */
+        #main-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        #start-btn, #stop-btn {
+            padding: 16px 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            min-height: 54px; /* タップターゲット確保 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #start-btn {
+            background: #27ae60;
+            color: white;
+        }
+
+        #start-btn:active { background: #1e8449; transform: scale(0.97); }
+        #start-btn:disabled { background: #555; color: #888; }
+
+        #stop-btn {
+            background: #e74c3c;
+            color: white;
+        }
+
+        #stop-btn:active  { background: #c0392b; transform: scale(0.97); }
+        #stop-btn:disabled { background: #555; color: #888; }
+
+        /* サブボタン行*/
+        #sub-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+
+        .sub-btn {
+            padding: 12px 4px;
+            font-size: 0.78em;
+            border: 1px solid #0f3460;
+            border-radius: 10px;
+            background: #0f3460;
+            color: #ddd;
+            cursor: pointer;
+            min-height: 48px; /* タップターゲット確保 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            -webkit-user-select: none;
+            user-select: none;transition: all 0.15s;
+        }
+
+        .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
+
+        .sub-btn .icon { font-size: 1.3em; line-height: 1; }
+
+        /* セレクト行 */
+        #selects {
+            display: grid;
+            grid-template-columns:1fr 1fr;
+            gap: 8px;
+        }
+
+        select {
+            padding: 10px 8px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+            background: #0f3460;
+            color: #ddd;
+            font-size: 0.85em;
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23aaa' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 28px;
+            min-height: 44px;
+        }
+
+        /* ===== コンテンツエリア ===== */
+        #main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            gap: 10px;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        /*未確定テキストエリア */
+        #interim-area {
+            height: 70px;
+            background: #16213e;
+            padding: 10px 12px;
+            border: 1px solid #0f3460;
+            border-radius: 10px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            color: #888;
+            font-size: 0.95em;
+            font-style: italic;
+            flex-shrink: 0;
+        }
+
+        #interim-area:empty::before {
+            content: attr(data-placeholder);
+            color: #555;
+        }
+
+        /* 確定テキストエリア */
+        #final-area {
+            flex: 1;
+            background: #16213e;
+            padding: 12px;
+            border: 1px solid #0f3460;
+            border-radius: 10px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            font-size: 1.05em;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 0;
+        }
+
+        /*編集モード */
+        #final-area[contenteditable="true"] {
+            background: #1a1a00;
+            border-color: #f1c40f;
+            caret-color: #f1c40f;
+        }
+
+        /* 編集中バッジ */
+        #edit-badge {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 16px;
+            background: #f1c40f;
+            color: #333;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.78em;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            z-index: 100;
+        }
+
+        /*===== タブレット対応（768px以上） ===== */
+        @media (min-width: 768px) {
+            #controls {
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+                padding: 12px 16px;
+            }
+
+            #main-buttons {
+                grid-template-columns: 180px 180px;
+                flex-shrink: 0;
+            }
+
+            #sub-buttons {
+                grid-template-columns: repeat(4, 90px);
+                flex-shrink: 0;
+            }
+
+            #selects {
+                grid-template-columns: 150px 150px;
+                flex-shrink: 0;
+            }
+
+            #interim-area { height: 90px; font-size: 1.0em; }
+            #final-area   { font-size: 1.15em; }
+        }
+
+        /* ===== 横向き対応 ===== */
+        @media (orientation: landscape) and (max-height: 500px) {
+            #controls { padding: 6px 10px; gap: 6px; }
+
+            #start-btn, #stop-btn { padding: 10px; min-height: 44px; font-size: 1.0em; }
+            .sub-btn { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
+
+            #interim-area { height: 50px; }}
+    </style>
+</head>
+<body>
+
+<!-- ステータスバー -->
+<div id="status-bar">
+    <div id="status-dot"></div>
+    <span id="status-text">待機中</span>
+</div>
+
+<!-- コントロール -->
+<div id="controls">
+
+    <div id="main-buttons">
+        <button id="start-btn">
+            <span>🎙️</span> 開始
+        </button>
+        <button id="stop-btn" disabled>
+            <span>⏹️</span> 停止
+        </button>
+    </div>
+
+    <div id="sub-buttons">
+        <button class="sub-btn" id="clear-btn">
+            <span class="icon">🗑️</span>クリア
+        </button>
+        <button class="sub-btn" id="copy-btn">
+            <span class="icon">📋</span>コピー
+        </button>
+        <button class="sub-btn" id="save-btn">
+            <span class="icon">💾</span>保存
+        </button>
+        <button class="sub-btn" id="reset-btn">
+            <span class="icon">🔄</span>リセット
+        </button>
+    </div>
+
+    <div id="selects">
+        <select id="sensitivity">
+            <option>通常</option>
+            <option>最高感度</option>
+            <option>低め</option>
+        </select>
+        <select id="boost">
+            <option>ブースト1</option>
+            <option>50</option>
+            <option>100</option></select>
+    </div>
+
+</div>
+
+<!-- テキストエリア -->
+<div id="main-container">
+    <div id="interim-area" data-placeholder="音声認識中のテキストがここに表示されます…"></div>
+    <div id="final-area" contenteditable="false"></div>
+</div>
+
+<!-- 編集中バッジ -->
+<div id="edit-badge">✏️ 編集中</div>
+
+<script>
+    //===== 初期化 =====
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+        alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
+    }
+
+    const recognition = new SpeechRecognition();
+    let isRecognizing = false;
+
+    const finalArea    = document.getElementById('final-area');
+    const interimArea  = document.getElementById('interim-area');
+    const statusDot    = document.getElementById('status-dot');
+    const statusText   = document.getElementById('status-text');
+    const editBadge    = document.getElementById('edit-badge');
+    const startBtn     = document.getElementById('start-btn');
+    const stopBtn      = document.getElementById('stop-btn');
+
+    recognition.lang            = 'ja-JP';
+    recognition.continuous      = true;
+    recognition.interimResults  = true;
+
+    // ===== ステータス更新ヘルパー =====
+    function setStatus(state) {
+        const states = {
+            idle:{ text: '待機中',    dot: false },
+            recording:  { text: '● 録音中',  dot: true  },
+            connecting: { text: '接続中…',   dot: false },
+            error:      { text: '⚠ エラー',  dot: false },
+        };
+        const s = states[state] || states.idle;
+        statusText.textContent = s.text;
+        statusDot.classList.toggle('recording', s.dot);
+    }
+
+    // ===== 音声認識イベント =====
+    recognition.onstart = () => {
+        isRecognizing = true;
+        setStatus('recording');
+        startBtn.disabled = true;
+        stopBtn.disabled  = false;
+        finalArea.contentEditable = 'false';
+        editBadge.style.display   = 'none';
+    };
+
+    recognition.onerror = (event) => {
+        // no-speech は無視（沈黙時に頻発するため）
+        if (event.error !== 'no-speech') {
+            console.error('認識エラー:', event.error);
+            setStatus('error');
+        }
+    };
+
+    recognition.onend = () => {
+        if (isRecognizing) {
+            // 自動再接続
+            setStatus('connecting');
+            setTimeout(() => {
+                if (isRecognizing) recognition.start();
+            }, 300); // 短いウェイトで安定再接続
+        } else {
+            setStatus('idle');
+            startBtn.disabled = false;
+            stopBtn.disabled  = true;
+            finalArea.contentEditable = 'true'; // 停止中のみ編集可
+            editBadge.style.display   = 'block';
+        }
+    };
+
+    recognition.onresult = (event) => {
+        let interimText = '';
+        let finalTrans  = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                if (transcript.trim()) finalTrans += transcript.trim() + '\n';
+            } else {
+                interimText += transcript;
+            }
+        }
+
+        if (finalTrans) {
+            finalArea.innerText += finalTrans;
+            finalArea.scrollTop  = finalArea.scrollHeight;
+        }
+
+        interimArea.innerText = interimText;
+    };
+
+    // ===== ボタン操作 =====
+    startBtn.onclick = () => {
+        if (isRecognizing) return;
+        isRecognizing = true;
+        recognition.start();
+    };
+
+    stopBtn.onclick = () => {
+        isRecognizing = false;
+        recognition.stop();
+    };
+
+    document.getElementById('clear-btn').onclick = () => {
+        if (!confirm('テキストをクリアしますか？')) return;
+        finalArea.innerText   = '';
+        interimArea.innerText = '';
+    };
+
+    document.getElementById('copy-btn').onclick = async () => {
+        const text = finalArea.innerText.trim();
+        if (!text) { alert('コピーするテキストがありません'); return; }
+        try {
+            await navigator.clipboard.writeText(text);
+            alert('コピーしました ✓');
+        } catch {
+            // フォールバック（一部Android対応）
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            alert('コピーしました ✓');
+        }
+    };
+
+    document.getElementById('save-btn').onclick = () => {
+        const text = finalArea.innerText.trim();
+        if (!text) { alert('保存するテキストがありません'); return; }
+
+        //ファイル名に日時を付与
+        const now= new Date();
+        const name = `transcript_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
+
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url); // メモリ解放
+    };
+
+    document.getElementById('reset-btn').onclick = () => {
+        if (!confirm('ページをリセットしますか？\n（入力内容はすべて消えます）')) return;
+        window.location.reload();
+    };// 編集終了時にバッジ更新
+    finalArea.addEventListener('blur', () => {
+        if (finalArea.contentEditable === 'true') {
+            editBadge.style.display = 'none';
+        }
+    });finalArea.addEventListener('focus', () => {
+        if (finalArea.contentEditable === 'true') {
+            editBadge.style.display = 'block';
+        }
+    });
+</script>
+</body>
+</html>
