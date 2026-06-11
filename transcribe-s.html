@@ -46,6 +46,7 @@
             100% { box-shadow: 0 0 0 0   rgba(46,204,113,0);   }
         }
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
+
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -76,12 +77,13 @@
             -webkit-user-select: none;
             user-select: none;
         }
-        #start-btn { background: #27ae60; color: white; }
-        #start-btn:active { background: #1e8449; transform: scale(0.97); }
+        #start-btn          { background: #27ae60; color: white; }
+        #start-btn:active{ background: #1e8449; transform: scale(0.97); }
         #start-btn:disabled { background: #555; color: #888; }
-        #stop-btn { background: #e74c3c; color: white; }
-        #stop-btn:active { background: #c0392b; transform: scale(0.97); }
-        #stop-btn:disabled { background: #555; color: #888; }
+        #stop-btn           { background: #e74c3c; color: white; }
+        #stop-btn:active    { background: #c0392b; transform: scale(0.97); }
+        #stop-btn:disabled  { background: #555; color: #888; }
+
         #sub-buttons {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -105,7 +107,8 @@
             user-select: none;transition: all 0.15s;
         }
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
-        .sub-btn .icon { font-size: 1.3em; line-height: 1; }
+        .sub-btn .icon  { font-size: 1.3em; line-height: 1; }
+
         #selects {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -126,6 +129,7 @@
             padding-right: 28px;
             min-height: 44px;
         }
+
         #main-container {
             flex: 1;
             display: flex;
@@ -135,22 +139,51 @@
             overflow: hidden;
             min-height: 0;
         }
+
+        /*★ 未確定エリア：認識中であることが伝わるよう色とラベルを明確化 */
+        #interim-wrapper {
+            flex-shrink: 0;
+        }
+        #interim-label {
+            font-size: 0.72em;
+            color: #888;
+            margin-bottom: 4px;
+            padding-left: 2px;
+        }
         #interim-area {
             height: 70px;
-            background: #16213e;
+            background: #0d1b2a;
             padding: 10px 12px;
-            border: 1px solid #0f3460;
+            border: 1px solid #1a4a80;
             border-radius: 10px;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            color: #888;
+            color: #7ec8e3;        /* ★ 認識中は水色で視認性UP */
             font-size: 0.95em;
             font-style: italic;
-            flex-shrink: 0;
+            transition: border-color 0.3s;
+        }
+        /* ★ 認識中はボーダーを光らせる */
+        #interim-area.active {
+            border-color: #3498db;
+            box-shadow: 0 0 6px rgba(52,152,219,0.4);
         }
         #interim-area:empty::before {
             content: attr(data-placeholder);
-            color: #555;
+            color: #444;
+        }
+
+        #final-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        #final-label {
+            font-size: 0.72em;
+            color: #888;
+            margin-bottom: 4px;
+            padding-left: 2px;
         }
         #final-area {
             flex: 1;
@@ -171,6 +204,7 @@
             border-color: #f1c40f;
             caret-color: #f1c40f;
         }
+
         #edit-badge {
             display: none;
             position: fixed;
@@ -185,13 +219,14 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             z-index: 100;
         }
+
         @media (min-width: 768px) {
             #controls { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
-            #main-buttons { grid-template-columns: 180px 180px; flex-shrink: 0; }
-            #sub-buttons { grid-template-columns: repeat(4, 90px); flex-shrink: 0; }
-            #selects { grid-template-columns: 150px 150px; flex-shrink: 0; }
-            #interim-area { height: 90px; font-size: 1.0em; }
-            #final-area { font-size: 1.15em; }
+            #main-buttons  { grid-template-columns: 180px 180px; flex-shrink: 0; }
+            #sub-buttons   { grid-template-columns: repeat(4, 90px); flex-shrink: 0; }
+            #selects       { grid-template-columns: 150px 150px; flex-shrink: 0; }
+            #interim-area  { height: 90px; font-size: 1.0em; }
+            #final-area    { font-size: 1.15em; }
         }
         @media (orientation: landscape) and (max-height: 500px) {
             #controls { padding: 6px 10px; gap: 6px; }
@@ -210,7 +245,8 @@
 <div id="controls">
     <div id="main-buttons">
         <button id="start-btn">🎙️ 開始</button>
-        <button id="stop-btn" disabled>⏹️ 停止</button></div>
+        <button id="stop-btn" disabled>⏹️ 停止</button>
+    </div>
     <div id="sub-buttons">
         <button class="sub-btn" id="clear-btn"><span class="icon">🗑️</span>クリア</button>
         <button class="sub-btn" id="copy-btn"><span class="icon">📋</span>コピー</button>
@@ -231,8 +267,16 @@
 </div>
 
 <div id="main-container">
-    <div id="interim-area" data-placeholder="音声認識中のテキストがここに表示されます…"></div>
-    <div id="final-area" contenteditable="false"></div>
+    <!--未確定エリア -->
+    <div id="interim-wrapper">
+        <div id="interim-label">🎤 認識中（未確定）</div>
+        <div id="interim-area" data-placeholder="話しかけると、ここにリアルタイムで表示されます…"></div>
+    </div>
+    <!-- 確定エリア -->
+    <div id="final-wrapper">
+        <div id="final-label">📝 確定テキスト</div>
+        <div id="final-area" contenteditable="false"></div>
+    </div>
 </div>
 <div id="edit-badge">✏️ 編集中</div>
 
@@ -243,12 +287,8 @@
     }
 
     const recognition = new SpeechRecognition();
-    let isRecognizing = false;
-
-    // ★ 重複防止：直前に確定したテキストを記憶
-    let lastFinalText = '';
-
-    // ★ 重複防止：再接続直後フラグ（再接続後の最初の結果を慎重に扱う）
+    let isRecognizing   = false;
+    let lastFinalText   = '';
     let justReconnected = false;
 
     const finalArea   = document.getElementById('final-area');
@@ -261,14 +301,14 @@
 
     recognition.lang           = 'ja-JP';
     recognition.continuous     = true;
-    recognition.interimResults = true;
+    recognition.interimResults = true;  // ★ これがtrueでないとinterimが来ない
 
     function setStatus(state) {
         const states = {
             idle:       { text: '待機中',    dot: false },
-            recording:  { text: '● 録音中',dot: true  },
+            recording:  { text: '● 録音中',  dot: true  },
             connecting: { text: '接続中…',   dot: false },
-            error:      { text: '⚠ エラー',dot: false },
+            error:      { text: '⚠ エラー',  dot: false },
         };
         const s = states[state] || states.idle;
         statusText.textContent = s.text;
@@ -292,9 +332,12 @@
     };
 
     recognition.onend = () => {
+        //★ 終了時に未確定エリアをクリア＋スタイル解除
+        interimArea.innerText = '';
+        interimArea.classList.remove('active');
+
         if (isRecognizing) {
             setStatus('connecting');
-            // ★ 再接続フラグを立てる
             justReconnected = true;
             setTimeout(() => {
                 if (isRecognizing) recognition.start();
@@ -305,8 +348,8 @@
             stopBtn.disabled  = true;
             finalArea.contentEditable = 'true';
             editBadge.style.display   = 'block';
-            lastFinalText    = '';
-            justReconnected  = false;
+            lastFinalText   = '';
+            justReconnected = false;
         }
     };
 
@@ -314,29 +357,33 @@
         let interimText = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript.trim();
+            // ★ trimしない生テキストを取得
+            const transcript = event.results[i][0].transcript;
 
             if (event.results[i].isFinal) {
-                if (!transcript) continue;
+                const trimmed = transcript.trim();
+                if (!trimmed) continue;
 
-                // ★ 再接続直後 かつ 直前テキストと一致 → 重複なのでスキップ
-                if (justReconnected && transcript === lastFinalText) {
-                    justReconnected = false; // フラグを消費
+                // 再接続直後の重複スキップ
+                if (justReconnected && trimmed === lastFinalText) {
+                    justReconnected = false;
                     continue;
                 }
+                //連続重複スキップ
+                if (trimmed === lastFinalText) continue;
 
-                // ★ 直前テキストと完全一致（再送）→ スキップ
-                if (transcript === lastFinalText) continue;
-
-                finalArea.innerText += transcript + '\n';
+                finalArea.innerText += trimmed + '\n';
                 finalArea.scrollTop  = finalArea.scrollHeight;
-                lastFinalText   = transcript;
+                lastFinalText   = trimmed;
                 justReconnected = false;} else {
-                interimText += event.results[i][0].transcript;
+                //★ interim はそのまま結合（trimしない）
+                interimText += transcript;
             }
         }
 
+        // ★ 未確定テキストをエリアに反映 ＋ activeクラスで光らせる
         interimArea.innerText = interimText;
+        interimArea.classList.toggle('active', interimText.length > 0);
     };
 
     startBtn.onclick = () => {
@@ -355,7 +402,8 @@
     document.getElementById('clear-btn').onclick = () => {
         if (!confirm('テキストをクリアしますか？')) return;
         finalArea.innerText   = '';
-        interimArea.innerText = '';lastFinalText = '';
+        interimArea.innerText = '';
+        lastFinalText = '';
     };
 
     document.getElementById('copy-btn').onclick = async () => {
