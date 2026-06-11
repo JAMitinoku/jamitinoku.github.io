@@ -9,7 +9,6 @@
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
-
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
             margin: 0;
@@ -20,19 +19,16 @@
             color: #eee;
             overflow: hidden;
         }
-
         #status-bar {
             background: #16213e;
             padding: 8px 14px;
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 0.85em;
             border-bottom: 1px solid #0f3460;
             min-height: 40px;
             flex-shrink: 0;
         }
-
         #status-dot {
             width: 10px;
             height: 10px;
@@ -40,21 +36,16 @@
             background: #e74c3c;
             flex-shrink: 0;transition: background 0.3s;
         }
-
         #status-dot.recording {
             background: #2ecc71;
             animation: pulse 1.4s infinite;
-            box-shadow: 0 0 0 0rgba(46, 204, 113, 0.7);
         }
-
         @keyframes pulse {
-            0%   { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
-            70%  { box-shadow: 0 0 0 8px rgba(46, 204, 113, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
+            0%{ box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
+            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0);   }
+            100% { box-shadow: 0 0 0 0   rgba(46,204,113,0);   }
         }
-
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
-
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -64,13 +55,11 @@
             border-bottom: 2px solid #0f3460;
             flex-shrink: 0;
         }
-
         #main-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 10px;
         }
-
         #start-btn, #stop-btn {
             padding: 16px 10px;
             font-size: 1.1em;
@@ -87,21 +76,17 @@
             -webkit-user-select: none;
             user-select: none;
         }
-
         #start-btn { background: #27ae60; color: white; }
         #start-btn:active { background: #1e8449; transform: scale(0.97); }
         #start-btn:disabled { background: #555; color: #888; }
-
         #stop-btn { background: #e74c3c; color: white; }
         #stop-btn:active { background: #c0392b; transform: scale(0.97); }
         #stop-btn:disabled { background: #555; color: #888; }
-
         #sub-buttons {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
             gap: 8px;
         }
-
         .sub-btn {
             padding: 12px 4px;
             font-size: 0.78em;
@@ -119,16 +104,13 @@
             -webkit-user-select: none;
             user-select: none;transition: all 0.15s;
         }
-
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
         .sub-btn .icon { font-size: 1.3em; line-height: 1; }
-
         #selects {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
-
         select {
             padding: 10px 8px;
             border-radius: 8px;
@@ -144,7 +126,6 @@
             padding-right: 28px;
             min-height: 44px;
         }
-
         #main-container {
             flex: 1;
             display: flex;
@@ -154,7 +135,6 @@
             overflow: hidden;
             min-height: 0;
         }
-
         #interim-area {
             height: 70px;
             background: #16213e;
@@ -168,12 +148,10 @@
             font-style: italic;
             flex-shrink: 0;
         }
-
         #interim-area:empty::before {
             content: attr(data-placeholder);
             color: #555;
         }
-
         #final-area {
             flex: 1;
             background: #16213e;
@@ -188,13 +166,11 @@
             word-break: break-all;
             min-height: 0;
         }
-
         #final-area[contenteditable="true"] {
             background: #1a1a00;
             border-color: #f1c40f;
             caret-color: #f1c40f;
         }
-
         #edit-badge {
             display: none;
             position: fixed;
@@ -209,7 +185,6 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             z-index: 100;
         }
-
         @media (min-width: 768px) {
             #controls { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
             #main-buttons { grid-template-columns: 180px 180px; flex-shrink: 0; }
@@ -218,7 +193,6 @@
             #interim-area { height: 90px; font-size: 1.0em; }
             #final-area { font-size: 1.15em; }
         }
-
         @media (orientation: landscape) and (max-height: 500px) {
             #controls { padding: 6px 10px; gap: 6px; }
             #start-btn, #stop-btn { padding: 10px; min-height: 44px; font-size: 1.0em; }
@@ -236,8 +210,7 @@
 <div id="controls">
     <div id="main-buttons">
         <button id="start-btn">🎙️ 開始</button>
-        <button id="stop-btn" disabled>⏹️ 停止</button>
-    </div>
+        <button id="stop-btn" disabled>⏹️ 停止</button></div>
     <div id="sub-buttons">
         <button class="sub-btn" id="clear-btn"><span class="icon">🗑️</span>クリア</button>
         <button class="sub-btn" id="copy-btn"><span class="icon">📋</span>コピー</button>
@@ -261,21 +234,22 @@
     <div id="interim-area" data-placeholder="音声認識中のテキストがここに表示されます…"></div>
     <div id="final-area" contenteditable="false"></div>
 </div>
-
 <div id="edit-badge">✏️ 編集中</div>
 
 <script>
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
     if (!SpeechRecognition) {
         alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
     }
 
-    const recognition  = new SpeechRecognition();
-    let isRecognizing  = false;
+    const recognition = new SpeechRecognition();
+    let isRecognizing = false;
 
-    // ★ 修正の核心：確定済みインデックスを記憶する変数
-    let lastFinalIndex = 0;
+    // ★ 重複防止：直前に確定したテキストを記憶
+    let lastFinalText = '';
+
+    // ★ 重複防止：再接続直後フラグ（再接続後の最初の結果を慎重に扱う）
+    let justReconnected = false;
 
     const finalArea   = document.getElementById('final-area');
     const interimArea = document.getElementById('interim-area');
@@ -289,20 +263,18 @@
     recognition.continuous     = true;
     recognition.interimResults = true;
 
-    // ===== ステータス更新 =====
     function setStatus(state) {
         const states = {
-            idle:       { text: '待機中',dot: false },
-            recording:  { text: '● 録音中', dot: true  },
-            connecting: { text: '接続中…',  dot: false },
-            error:      { text: '⚠ エラー', dot: false },
+            idle:       { text: '待機中',    dot: false },
+            recording:  { text: '● 録音中',dot: true  },
+            connecting: { text: '接続中…',   dot: false },
+            error:      { text: '⚠ エラー',dot: false },
         };
         const s = states[state] || states.idle;
         statusText.textContent = s.text;
         statusDot.classList.toggle('recording', s.dot);
     }
 
-    // ===== 音声認識イベント =====
     recognition.onstart = () => {
         isRecognizing = true;
         setStatus('recording');
@@ -322,8 +294,8 @@
     recognition.onend = () => {
         if (isRecognizing) {
             setStatus('connecting');
-            //★ 再接続時にインデックスをリセット
-            lastFinalIndex = 0;
+            // ★ 再接続フラグを立てる
+            justReconnected = true;
             setTimeout(() => {
                 if (isRecognizing) recognition.start();
             }, 300);
@@ -333,41 +305,45 @@
             stopBtn.disabled  = true;
             finalArea.contentEditable = 'true';
             editBadge.style.display   = 'block';
+            lastFinalText    = '';
+            justReconnected  = false;
         }
     };
 
     recognition.onresult = (event) => {
         let interimText = '';
-        let finalTrans  = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
+            const transcript = event.results[i][0].transcript.trim();
 
             if (event.results[i].isFinal) {
-                //★ lastFinalIndex より大きいものだけ追記（重複防止）
-                if (i >= lastFinalIndex) {
-                    if (transcript.trim()) finalTrans += transcript.trim() + '\n';
-                    lastFinalIndex = i + 1;
-                }
-            } else {
-                interimText += transcript;
-            }
-        }
+                if (!transcript) continue;
 
-        if (finalTrans) {
-            finalArea.innerText += finalTrans;
-            finalArea.scrollTop  = finalArea.scrollHeight;
+                // ★ 再接続直後 かつ 直前テキストと一致 → 重複なのでスキップ
+                if (justReconnected && transcript === lastFinalText) {
+                    justReconnected = false; // フラグを消費
+                    continue;
+                }
+
+                // ★ 直前テキストと完全一致（再送）→ スキップ
+                if (transcript === lastFinalText) continue;
+
+                finalArea.innerText += transcript + '\n';
+                finalArea.scrollTop  = finalArea.scrollHeight;
+                lastFinalText   = transcript;
+                justReconnected = false;} else {
+                interimText += event.results[i][0].transcript;
+            }
         }
 
         interimArea.innerText = interimText;
     };
 
-    // ===== ボタン操作 =====
     startBtn.onclick = () => {
         if (isRecognizing) return;
-        // ★ 開始時もインデックスをリセット
-        lastFinalIndex = 0;
-        isRecognizing  = true;
+        lastFinalText   = '';
+        justReconnected = false;
+        isRecognizing   = true;
         recognition.start();
     };
 
@@ -379,7 +355,7 @@
     document.getElementById('clear-btn').onclick = () => {
         if (!confirm('テキストをクリアしますか？')) return;
         finalArea.innerText   = '';
-        interimArea.innerText = '';
+        interimArea.innerText = '';lastFinalText = '';
     };
 
     document.getElementById('copy-btn').onclick = async () => {
@@ -420,7 +396,8 @@
 
     finalArea.addEventListener('blur', () => {
         if (finalArea.contentEditable === 'true') editBadge.style.display = 'none';
-    });finalArea.addEventListener('focus', () => {
+    });
+    finalArea.addEventListener('focus', () => {
         if (finalArea.contentEditable === 'true') editBadge.style.display = 'block';
     });
 </script>
