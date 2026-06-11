@@ -33,12 +33,15 @@
             flex-shrink: 0;transition: background 0.3s;
         }
         #status-dot.recording { background: #2ecc71; animation: pulse 1.4s infinite; }
+        #status-dot.waiting{ background: #f39c12; }
         @keyframes pulse {
-            0%   { box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
+            0%   { box-shadow: 0 0 0 0rgba(46,204,113,0.7); }
             70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0); }
             100% { box-shadow: 0 0 0 0   rgba(46,204,113,0); }
         }
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
+        #retry-count { font-size: 0.75em; color: #666; }
+
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -71,6 +74,7 @@
         #stop-btn           { background: #e74c3c; color: white; }
         #stop-btn:active    { background: #c0392b; transform: scale(0.97); }
         #stop-btn:disabled  { background: #555; color: #888; }
+
         #sub-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .sub-btn {
             padding: 12px 4px;
@@ -91,6 +95,7 @@
         }
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
         .sub-btn .icon  { font-size: 1.3em; line-height: 1; }
+
         #selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         select {
             padding: 10px 8px;
@@ -107,6 +112,7 @@
             padding-right: 28px;
             min-height: 44px;
         }
+
         #main-container {
             flex: 1;
             display: flex;
@@ -174,6 +180,7 @@
 <div id="status-bar">
     <div id="status-dot"></div>
     <span id="status-text">待機中</span>
+    <span id="retry-count"></span>
 </div>
 
 <div id="controls">
@@ -205,46 +212,55 @@ if (!SpeechRecognition) {
     alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
 }
 
-// ★毎回newして使い捨てる関数
-function createRecognition() {
-    const r = new SpeechRecognition();
-    r.lang= 'ja-JP';
-    r.continuous     = false; // ★ falseで1セッション1結果、再送なし
-    r.interimResults = true;
-    return r;
-}
-
-let recognition= null;
-let isRecognizing = false;
+/*── 状態変数 ── */
+let recognition   = null;
+let isRecognizing = false;   // ユーザーが録音中とした意図
 let finalBuffer   = '';
 let interimNode   = null;
+let retryCount    = 0;
+let retryTimer    = null;
+const MAX_RETRY   = 99999;   // 実質無制限（異常時のみstopで抜ける）
 
+/* ── Wake Lock ── */
+let wakeLock = null;
+async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) return;
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch(e) { console.warn('WakeLock取得失敗:', e); }
+}
+async function releaseWakeLock() {
+    if (wakeLock) { try { await wakeLock.release(); } catch(e) {} wakeLock = null; }
+}
+
+/* ── DOM ── */
 const finalArea  = document.getElementById('final-area');
 const statusDot  = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
+const retryEl    = document.getElementById('retry-count');
 const editBadge  = document.getElementById('edit-badge');
 const startBtn   = document.getElementById('start-btn');
 const stopBtn    = document.getElementById('stop-btn');
 
-function setStatus(state) {
+/* ── ステータス表示 ── */
+function setStatus(state, detail) {
     const map = {
-        idle:       { text: '待機中',dot: false },
-        recording:  { text: '● 録音中',  dot: true  },
-        connecting: { text: '接続中…',   dot: false },
-        error:      { text: '⚠ エラー',dot: false },
-    };
+        idle:       { text: '待機中',dot: '',},
+        recording:  { text: '● 録音中',     dot: 'recording', },
+        reconnect:  { text: '再接続中…',    dot: 'waiting',   },
+        error:      { text: '⚠ エラー',     dot: '',          },
+        denied:     { text: '🚫 マイク拒否', dot: '',          },};
     const s = map[state] || map.idle;
-    statusText.textContent = s.text;
-    statusDot.classList.toggle('recording', s.dot);
+    statusText.textContent = detail ? `${s.text}（${detail}）` : s.text;
+    statusDot.className= s.dot;
 }
 
+/* ── interim DOM ── */
 function removeInterimNode() {
-    if (interimNode && finalArea.contains(interimNode)) {
-        finalArea.removeChild(interimNode);
-    }
+    if (interimNode && finalArea.contains(interimNode)) finalArea.removeChild(interimNode);
     interimNode = null;
 }
-
 function setInterim(text) {
     if (!text) { removeInterimNode(); return; }
     if (!interimNode) {
@@ -256,90 +272,156 @@ function setInterim(text) {
     finalArea.scrollTop = finalArea.scrollHeight;
 }
 
+/* ── 確定テキスト追記 ── */
 function appendFinal(text) {
     removeInterimNode();
     finalBuffer += text + '\n';
-    // ★ textContentで設定し直すことでDOMをクリーンに保つ
     finalArea.textContent = finalBuffer;
     finalArea.scrollTop   = finalArea.scrollHeight;
 }
 
-// ★ 1セッション分のrecognitionを起動
+/* ── 1セッション起動 ── */
 function startSession() {
-    recognition = createRecognition();
+    if (!isRecognizing) return;
+    if (retryCount >= MAX_RETRY) { forceStop(); return; }
+
+    // 前セッションを確実に破棄
+    if (recognition) {
+        recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null;
+        try { recognition.abort(); } catch(e) {}recognition = null;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang           = 'ja-JP';
+    recognition.continuous     = false; // ★重複防止のため必ずfalse
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-        setStatus('recording');
-    };
-
-    recognition.onerror = (e) => {
-        if (e.error === 'no-speech' || e.error === 'aborted') return;
-        console.warn('error:', e.error);
-        setStatus('error');
-    };
+        retryCount = 0;           // 正常起動でリセット
+        retryEl.textContent = '';
+        setStatus('recording');};
 
     recognition.onresult = (event) => {
-        // ★ continuous:false なので results は常に新鮮、インデックス問題なし
-        let interimText = '';
+        let interim = '';
         for (let i = 0; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
                 const t = event.results[i][0].transcript.trim();
                 if (t) appendFinal(t);
                 setInterim('');
             } else {
-                interimText += event.results[i][0].transcript;
+                interim += event.results[i][0].transcript;
             }
         }
-        if (interimText) setInterim(interimText);
+        if (interim) setInterim(interim);
+    };
+
+    recognition.onerror = (e) => {
+        // no-speech / aborted は正常範囲、onendに任せる
+        if (e.error === 'no-speech' || e.error === 'aborted') return;
+
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            setStatus('denied');
+            forceStop();
+            return;
+        }
+        // network等は再試行
+        console.warn('SR error:', e.error);
+        setStatus('reconnect', e.error);
     };
 
     recognition.onend = () => {
         removeInterimNode();
-        if (isRecognizing) {
-            // ★ 自前で再起動（新しいインスタンスで）
-            setStatus('connecting');
-            setTimeout(() => {
-                if (isRecognizing) startSession();
-            }, 200);
-        } else {
-            setStatus('idle');
-            startBtn.disabled = false;
-            stopBtn.disabled  = true;
-            finalArea.contentEditable = 'true';
-            editBadge.style.display   = 'block';
+        if (!isRecognizing) {
+            // ユーザーが停止した
+            onStopped();
+            return;
         }
+        // ★ 認識落ちを防ぐため即座に再起動（遅延なし）
+        retryCount++;
+        retryEl.textContent = retryCount > 1 ? `再接続${retryCount}回` : '';
+        setStatus('reconnect');
+
+        // networkエラー等でブラウザ側APIがビジー状態のときだけ少し待つ
+        const delay = retryCount > 5 ? 300 : 0;
+        retryTimer = setTimeout(startSession, delay);
     };
 
     try {
         recognition.start();
     } catch(e) {
-        console.warn('start error:', e);
+        // InvalidStateError などの場合は少し待って再試行
+        console.warn('start() threw:', e);
+        retryTimer = setTimeout(startSession, 200);
     }
 }
 
-startBtn.onclick = () => {
+/* ── 強制停止（内部用） ── */
+function forceStop() {
+    isRecognizing = false;
+    clearTimeout(retryTimer);
+    if (recognition) {
+        recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null;
+        try { recognition.abort(); } catch(e) {}
+        recognition = null;
+    }
+    onStopped();
+}
+
+/* ── 停止後のUI更新 ── */
+function onStopped() {
+    releaseWakeLock();
+    setStatus('idle');
+    retryEl.textContent = '';
+    startBtn.disabled = false;
+    stopBtn.disabled  = true;
+    finalArea.contentEditable = 'true';
+    editBadge.style.display   = 'block';
+}
+
+/* ── 開始ボタン ── */
+startBtn.onclick = async () => {
     if (isRecognizing) return;
-    //編集内容をbufferに同期
-    finalBuffer = finalArea.textContent;
+    finalBuffer   = finalArea.textContent; // 編集内容を引き継ぐ
     isRecognizing = true;
+    retryCount= 0;
     startBtn.disabled = true;
     stopBtn.disabled  = false;
     finalArea.contentEditable = 'false';
     editBadge.style.display   = 'none';
+    await requestWakeLock();
     startSession();
 };
 
+/* ── 停止ボタン ── */
 stopBtn.onclick = () => {
+    if (!isRecognizing) return;
     isRecognizing = false;
+    clearTimeout(retryTimer);
     if (recognition) {
+        recognition.onend = null; // onendを無効化してからstop
         try { recognition.stop(); } catch(e) {}
         recognition = null;
     }
+    onStopped();
 };
 
+/* ── バックグラウンド復帰時の自動再開 ── */
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && isRecognizing) {
+        // WakeLock再取得
+        if (!wakeLock) await requestWakeLock();
+        // セッションが死んでいたら即再起動
+        clearTimeout(retryTimer);
+        startSession();
+    }
+});
+
+/* ── サブボタン ── */
 document.getElementById('clear-btn').onclick = () => {
     if (!confirm('テキストをクリアしますか？')) return;
     finalBuffer = '';
+    removeInterimNode();
     finalArea.textContent = '';
 };
 
@@ -361,12 +443,14 @@ document.getElementById('copy-btn').onclick = async () => {
 document.getElementById('save-btn').onclick = () => {
     const text = finalBuffer.trim();
     if (!text) { alert('保存するテキストがありません'); return; }
-    const now  = new Date();
-    const name = `transcript_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a'); a.href = url; a.download = name; a.click();
-    URL.revokeObjectURL(url);
+    const now = new Date();
+    const pad = n => String(n).padStart(2,'0');
+    const name = `transcript_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
+    const a = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(new Blob([text], {type:'text/plain;charset=utf-8'})),
+        download: name
+    });
+    a.click();URL.revokeObjectURL(a.href);
 };
 
 document.getElementById('reset-btn').onclick = () => {
@@ -376,7 +460,8 @@ document.getElementById('reset-btn').onclick = () => {
 
 finalArea.addEventListener('blur', () => {
     if (finalArea.contentEditable === 'true') {
-        finalBuffer = finalArea.textContent;editBadge.style.display = 'none';
+        finalBuffer = finalArea.textContent;
+        editBadge.style.display = 'none';
     }
 });
 finalArea.addEventListener('focus', () => {
