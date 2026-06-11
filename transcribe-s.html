@@ -30,17 +30,18 @@
             width: 10px; height: 10px;
             border-radius: 50%;
             background: #e74c3c;
-            flex-shrink: 0; transition: background 0.3s;
+            flex-shrink: 0;transition: background 0.3s;
         }
         #status-dot.recording { background: #2ecc71; animation: pulse 1.4s infinite; }
         #status-dot.waiting{ background: #f39c12; }
         @keyframes pulse {
-            0%   { box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
-            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0);   }
-            100% { box-shadow: 0 0 0 0   rgba(46,204,113,0);   }
+            0%   { box-shadow: 0 0 0 0rgba(46,204,113,0.7); }
+            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0); }
+            100% { box-shadow: 0 0 0 0   rgba(46,204,113,0); }
         }
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
         #retry-count { font-size: 0.75em; color: #666; }
+
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -73,6 +74,7 @@
         #stop-btn           { background: #e74c3c; color: white; }
         #stop-btn:active    { background: #c0392b; transform: scale(0.97); }
         #stop-btn:disabled  { background: #555; color: #888; }
+
         #sub-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .sub-btn {
             padding: 12px 4px;
@@ -89,10 +91,11 @@
             justify-content: center;
             gap: 3px;
             -webkit-user-select: none;
-            user-select: none; transition: all 0.15s;
+            user-select: none;transition: all 0.15s;
         }
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
         .sub-btn .icon  { font-size: 1.3em; line-height: 1; }
+
         #selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         select {
             padding: 10px 8px;
@@ -109,6 +112,7 @@
             padding-right: 28px;
             min-height: 44px;
         }
+
         #main-container {
             flex: 1;
             display: flex;
@@ -137,8 +141,7 @@
             word-break: break-all;
             min-height: 0;
             outline: none;
-            white-space: pre-wrap;
-        }
+            white-space: pre-wrap;}
         #final-area[contenteditable="true"] {
             background: #1a1a00;
             border-color: #f1c40f;
@@ -209,16 +212,14 @@ if (!SpeechRecognition) {
     alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
 }
 
-/*── 状態 ── */
-let recognition= null;
-let isRecognizing = false;
+/*── 状態変数 ── */
+let recognition   = null;
+let isRecognizing = false;   // ユーザーが録音中とした意図
 let finalBuffer   = '';
 let interimNode   = null;
 let retryCount    = 0;
 let retryTimer    = null;
-
-// ★ 未確定ドロップ救済用：最後に受け取った interim を常に保持
-let lastInterim   = '';
+const MAX_RETRY   = 99999;   // 実質無制限（異常時のみstopで抜ける）
 
 /* ── Wake Lock ── */
 let wakeLock = null;
@@ -227,7 +228,7 @@ async function requestWakeLock() {
     try {
         wakeLock = await navigator.wakeLock.request('screen');
         wakeLock.addEventListener('release', () => { wakeLock = null; });
-    } catch(e) {}
+    } catch(e) { console.warn('WakeLock取得失敗:', e); }
 }
 async function releaseWakeLock() {
     if (wakeLock) { try { await wakeLock.release(); } catch(e) {} wakeLock = null; }
@@ -242,17 +243,17 @@ const editBadge  = document.getElementById('edit-badge');
 const startBtn   = document.getElementById('start-btn');
 const stopBtn    = document.getElementById('stop-btn');
 
-/* ── ステータス ── */
+/* ── ステータス表示 ── */
 function setStatus(state, detail) {
     const map = {
-        idle:{ text: '待機中',cls: ''},
-        recording: { text: '● 録音中',     cls: 'recording' },
-        reconnect: { text: '再接続中…',    cls: 'waiting'   },
-        error:     { text: '⚠ エラー',     cls: ''          },
-        denied:    { text: '🚫 マイク拒否', cls: ''          },};
+        idle:       { text: '待機中',dot: '',},
+        recording:  { text: '● 録音中',     dot: 'recording', },
+        reconnect:  { text: '再接続中…',    dot: 'waiting',   },
+        error:      { text: '⚠ エラー',     dot: '',          },
+        denied:     { text: '🚫 マイク拒否', dot: '',          },};
     const s = map[state] || map.idle;
     statusText.textContent = detail ? `${s.text}（${detail}）` : s.text;
-    statusDot.className = s.cls;
+    statusDot.className= s.dot;
 }
 
 /* ── interim DOM ── */
@@ -261,7 +262,6 @@ function removeInterimNode() {
     interimNode = null;
 }
 function setInterim(text) {
-    lastInterim = text; // ★ 常に最新interimを記憶
     if (!text) { removeInterimNode(); return; }
     if (!interimNode) {
         interimNode = document.createElement('span');
@@ -274,115 +274,107 @@ function setInterim(text) {
 
 /* ── 確定テキスト追記 ── */
 function appendFinal(text) {
-    const t = text.trim();
-    if (!t) return;
     removeInterimNode();
-    finalBuffer += t + '\n';
+    finalBuffer += text + '\n';
     finalArea.textContent = finalBuffer;
     finalArea.scrollTop   = finalArea.scrollHeight;
 }
 
-/* ── ★ interim救済：onend時に未確定テキストを確定扱いで保存 ── */
-function salvageInterim() {
-    const t = lastInterim.trim();
-    lastInterim = '';
-    if (t) {
-        appendFinal(t);
-        console.debug('salvaged interim:', t);
-    }
-}
-
-/* ── セッション起動 ── */
+/* ── 1セッション起動 ── */
 function startSession() {
     if (!isRecognizing) return;
+    if (retryCount >= MAX_RETRY) { forceStop(); return; }
 
-    // 前インスタンスを完全破棄
+    // 前セッションを確実に破棄
     if (recognition) {
-        recognition.onstart = recognition.onend =recognition.onerror = recognition.onresult = null;
-        try { recognition.abort(); } catch(e) {}
-        recognition = null;
+        recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null;
+        try { recognition.abort(); } catch(e) {}recognition = null;
     }
 
     recognition = new SpeechRecognition();
-    recognition.lang= 'ja-JP';
-    recognition.continuous      = true;  // ★ trueで途中切れを減らす
-    recognition.interimResults= true;
+    recognition.lang           = 'ja-JP';
+    recognition.continuous     = false; // ★重複防止のため必ずfalse
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onstart = () => {
-        retryCount = 0;
+        retryCount = 0;           // 正常起動でリセット
         retryEl.textContent = '';
-        setStatus('recording');
-    };
+        setStatus('recording');};
 
     recognition.onresult = (event) => {
         let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        for (let i = 0; i < event.results.length; i++) {
             if (event.results[i].isFinal) {
-                appendFinal(event.results[i][0].transcript);
-                lastInterim = ''; // 確定したので interim履歴をリセット
+                const t = event.results[i][0].transcript.trim();
+                if (t) appendFinal(t);
+                setInterim('');
             } else {
                 interim += event.results[i][0].transcript;
             }
         }
-        setInterim(interim);
+        if (interim) setInterim(interim);
     };
 
     recognition.onerror = (e) => {
-|         if (e.error === 'no-speech' || e.error === 'aborted') return; |
-|         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { |
-            setStatus('denied'); forceStop(); return;
+        // no-speech / aborted は正常範囲、onendに任せる
+        if (e.error === 'no-speech' || e.error === 'aborted') return;
+
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            setStatus('denied');
+            forceStop();
+            return;
         }
+        // network等は再試行
         console.warn('SR error:', e.error);
         setStatus('reconnect', e.error);
     };
 
     recognition.onend = () => {
-        // ★ セッションが切れた瞬間に interim を救済
-        salvageInterim();
         removeInterimNode();
-
-        if (!isRecognizing) { onStopped(); return; }
-
+        if (!isRecognizing) {
+            // ユーザーが停止した
+            onStopped();
+            return;
+        }
+        // ★ 認識落ちを防ぐため即座に再起動（遅延なし）
         retryCount++;
         retryEl.textContent = retryCount > 1 ? `再接続${retryCount}回` : '';
         setStatus('reconnect');
 
-        // 連続エラーのときだけ少し待つ、通常は即再起動
-        const delay = retryCount > 10 ? 500 : retryCount > 3 ? 200 : 0;
+        // networkエラー等でブラウザ側APIがビジー状態のときだけ少し待つ
+        const delay = retryCount > 5 ? 300 : 0;
         retryTimer = setTimeout(startSession, delay);
     };
 
     try {
         recognition.start();
     } catch(e) {
+        // InvalidStateError などの場合は少し待って再試行
         console.warn('start() threw:', e);
-        retryTimer = setTimeout(startSession, 300);
+        retryTimer = setTimeout(startSession, 200);
     }
 }
 
-/* ── 強制停止 ── */
+/* ── 強制停止（内部用） ── */
 function forceStop() {
     isRecognizing = false;
     clearTimeout(retryTimer);
-    salvageInterim(); // ★ 強制停止時も救済
     if (recognition) {
-        recognition.onstart = recognition.onend =
-        recognition.onerror = recognition.onresult = null;
+        recognition.onstart = recognition.onend = recognition.onerror = recognition.onresult = null;
         try { recognition.abort(); } catch(e) {}
         recognition = null;
     }
     onStopped();
 }
 
-/* ── 停止後UI ── */
+/* ── 停止後のUI更新 ── */
 function onStopped() {
     releaseWakeLock();
-    removeInterimNode();
     setStatus('idle');
-    retryEl.textContent   = '';
-    startBtn.disabled     = false;
-    stopBtn.disabled      = true;
+    retryEl.textContent = '';
+    startBtn.disabled = false;
+    stopBtn.disabled  = true;
     finalArea.contentEditable = 'true';
     editBadge.style.display   = 'block';
 }
@@ -390,10 +382,9 @@ function onStopped() {
 /* ── 開始ボタン ── */
 startBtn.onclick = async () => {
     if (isRecognizing) return;
-    finalBuffer   = finalArea.textContent;
-    lastInterim   = '';
+    finalBuffer   = finalArea.textContent; // 編集内容を引き継ぐ
     isRecognizing = true;
-    retryCount    = 0;
+    retryCount= 0;
     startBtn.disabled = true;
     stopBtn.disabled  = false;
     finalArea.contentEditable = 'false';
@@ -407,19 +398,20 @@ stopBtn.onclick = () => {
     if (!isRecognizing) return;
     isRecognizing = false;
     clearTimeout(retryTimer);
-    salvageInterim(); // ★ 停止時も救済
     if (recognition) {
-        recognition.onend = null; // 誤再起動防止
+        recognition.onend = null; // onendを無効化してからstop
         try { recognition.stop(); } catch(e) {}
         recognition = null;
     }
     onStopped();
 };
 
-/* ── バックグラウンド復帰 ── */
+/* ── バックグラウンド復帰時の自動再開 ── */
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && isRecognizing) {
+        // WakeLock再取得
         if (!wakeLock) await requestWakeLock();
+        // セッションが死んでいたら即再起動
         clearTimeout(retryTimer);
         startSession();
     }
@@ -429,7 +421,6 @@ document.addEventListener('visibilitychange', async () => {
 document.getElementById('clear-btn').onclick = () => {
     if (!confirm('テキストをクリアしますか？')) return;
     finalBuffer = '';
-    lastInterim = '';
     removeInterimNode();
     finalArea.textContent = '';
 };
@@ -453,13 +444,13 @@ document.getElementById('save-btn').onclick = () => {
     const text = finalBuffer.trim();
     if (!text) { alert('保存するテキストがありません'); return; }
     const now = new Date();
-    const pad = n => String(n).padStart(2, '0');
+    const pad = n => String(n).padStart(2,'0');
     const name = `transcript_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
     const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' })),
+        href: URL.createObjectURL(new Blob([text], {type:'text/plain;charset=utf-8'})),
         download: name
     });
-    a.click(); URL.revokeObjectURL(a.href);
+    a.click();URL.revokeObjectURL(a.href);
 };
 
 document.getElementById('reset-btn').onclick = () => {
