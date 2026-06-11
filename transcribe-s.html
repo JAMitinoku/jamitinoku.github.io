@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>音声認識エディタ</title>
     <style>
-        *, *::before, *::after {
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
+        *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans','Noto Sans JP', sans-serif;
             margin: 0;
             display: flex;
             flex-direction: column;
@@ -19,8 +16,6 @@
             color: #eee;
             overflow: hidden;
         }
-
-        /*ステータスバー */
         #status-bar {
             background: #16213e;
             padding: 8px 14px;
@@ -37,18 +32,13 @@
             background: #e74c3c;
             flex-shrink: 0;transition: background 0.3s;
         }
-        #status-dot.recording {
-            background: #2ecc71;
-            animation: pulse 1.4s infinite;
-        }
+        #status-dot.recording { background: #2ecc71; animation: pulse 1.4s infinite; }
         @keyframes pulse {
             0%   { box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
-            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0);   }
-            100% { box-shadow: 0 0 0 0   rgba(46,204,113,0);   }
+            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0); }
+            100% { box-shadow: 0 0 0 0   rgba(46,204,113,0); }
         }
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
-
-        /* コントロール */
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -58,11 +48,7 @@
             border-bottom: 2px solid #0f3460;
             flex-shrink: 0;
         }
-        #main-buttons {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
+        #main-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         #start-btn, #stop-btn {
             padding: 16px 10px;
             font-size: 1.1em;
@@ -85,12 +71,7 @@
         #stop-btn           { background: #e74c3c; color: white; }
         #stop-btn:active    { background: #c0392b; transform: scale(0.97); }
         #stop-btn:disabled  { background: #555; color: #888; }
-
-        #sub-buttons {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-        }
+        #sub-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .sub-btn {
             padding: 12px 4px;
             font-size: 0.78em;
@@ -110,12 +91,7 @@
         }
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
         .sub-btn .icon  { font-size: 1.3em; line-height: 1; }
-
-        #selects {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
+        #selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         select {
             padding: 10px 8px;
             border-radius: 8px;
@@ -131,8 +107,6 @@
             padding-right: 28px;
             min-height: 44px;
         }
-
-        /* ★ メインエリア：確定テキストのみ全面表示 */
         #main-container {
             flex: 1;
             display: flex;
@@ -148,8 +122,6 @@
             padding-left: 2px;
             flex-shrink: 0;
         }
-
-        /* ★ 確定テキストエリア本体 */
         #final-area {
             flex: 1;
             background: #16213e;
@@ -163,24 +135,17 @@
             word-break: break-all;
             min-height: 0;
             outline: none;
-        }
+            white-space: pre-wrap;}
         #final-area[contenteditable="true"] {
             background: #1a1a00;
             border-color: #f1c40f;
             caret-color: #f1c40f;
         }
-
-        /* ★ interim テキスト用スタイル（確定エリア末尾のspan） */
-        #interim-node {
-            color: #6a9fd8;
-            font-style: italic;
-        }
-
+        #interim-node { color: #6a9fd8; font-style: italic; }
         #edit-badge {
             display: none;
             position: fixed;
-            bottom: 20px;
-            right: 16px;
+            bottom: 20px; right: 16px;
             background: #f1c40f;
             color: #333;
             padding: 6px 12px;
@@ -190,7 +155,6 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.4);
             z-index: 100;
         }
-
         @media (min-width: 768px) {
             #controls{ flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
             #main-buttons  { grid-template-columns: 180px 180px; flex-shrink: 0; }
@@ -199,9 +163,9 @@
             #final-area    { font-size: 1.15em; }
         }
         @media (orientation: landscape) and (max-height: 500px) {
-            #controls{ padding: 6px 10px; gap: 6px; }
+            #controls { padding: 6px 10px; gap: 6px; }
             #start-btn, #stop-btn { padding: 10px; min-height: 44px; font-size: 1.0em; }
-            .sub-btn     { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
+            .sub-btn { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
         }
     </style>
 </head>
@@ -224,232 +188,200 @@
         <button class="sub-btn" id="reset-btn"><span class="icon">🔄</span>リセット</button>
     </div>
     <div id="selects">
-        <select id="sensitivity">
-            <option>通常</option>
-            <option>最高感度</option>
-            <option>低め</option>
-        </select>
-        <select id="boost">
-            <option>ブースト1</option>
-            <option>50</option>
-            <option>100</option>
-        </select>
+        <select id="sensitivity"><option>通常</option><option>最高感度</option><option>低め</option></select>
+        <select id="boost"><option>ブースト1</option><option>50</option><option>100</option></select>
     </div>
 </div>
 
 <div id="main-container">
     <div id="final-label">📝 確定テキスト（停止中に編集可）</div>
-    <!--★ interimはこのdiv内のspanで末尾表示 -->
     <div id="final-area" contenteditable="false"></div>
 </div>
 <div id="edit-badge">✏️ 編集中</div>
 
 <script>
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SpeechRecognition) {
+    alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
+}
+
+// ★毎回newして使い捨てる関数
+function createRecognition() {
+    const r = new SpeechRecognition();
+    r.lang= 'ja-JP';
+    r.continuous     = false; // ★ falseで1セッション1結果、再送なし
+    r.interimResults = true;
+    return r;
+}
+
+let recognition= null;
+let isRecognizing = false;
+let finalBuffer   = '';
+let interimNode   = null;
+
+const finalArea  = document.getElementById('final-area');
+const statusDot  = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const editBadge  = document.getElementById('edit-badge');
+const startBtn   = document.getElementById('start-btn');
+const stopBtn    = document.getElementById('stop-btn');
+
+function setStatus(state) {
+    const map = {
+        idle:       { text: '待機中',dot: false },
+        recording:  { text: '● 録音中',  dot: true  },
+        connecting: { text: '接続中…',   dot: false },
+        error:      { text: '⚠ エラー',dot: false },
+    };
+    const s = map[state] || map.idle;
+    statusText.textContent = s.text;
+    statusDot.classList.toggle('recording', s.dot);
+}
+
+function removeInterimNode() {
+    if (interimNode && finalArea.contains(interimNode)) {
+        finalArea.removeChild(interimNode);
     }
+    interimNode = null;
+}
 
-    const recognition = new SpeechRecognition();
-    let isRecognizing   = false;
-    let lastFinalText   = '';
-    let justReconnected = false;
-
-    const finalArea  = document.getElementById('final-area');
-    const statusDot  = document.getElementById('status-dot');
-    const statusText = document.getElementById('status-text');
-    const editBadge  = document.getElementById('edit-badge');
-    const startBtn= document.getElementById('start-btn');
-    const stopBtn    = document.getElementById('stop-btn');
-
-    recognition.lang           = 'ja-JP';
-    recognition.continuous     = true;
-    recognition.interimResults = true;
-
-    //★ 確定テキストを蓄積するための文字列（innerTextと分離して管理）
-    let finalBuffer = '';
-
-    // ★ interim表示用のspanノード（常にDOMの末尾に置く）
-    let interimNode = null;
-
-    function getOrCreateInterimNode() {
-        if (!interimNode || !finalArea.contains(interimNode)) {
-            interimNode = document.createElement('span');
-            interimNode.id = 'interim-node';
-            finalArea.appendChild(interimNode);
-        }
-        return interimNode;
+function setInterim(text) {
+    if (!text) { removeInterimNode(); return; }
+    if (!interimNode) {
+        interimNode = document.createElement('span');
+        interimNode.id = 'interim-node';
+        finalArea.appendChild(interimNode);
     }
+    interimNode.textContent = text;
+    finalArea.scrollTop = finalArea.scrollHeight;
+}
 
-    function removeInterimNode() {
-        if (interimNode && finalArea.contains(interimNode)) {
-            finalArea.removeChild(interimNode);
-        }
-        interimNode = null;
-    }
+function appendFinal(text) {
+    removeInterimNode();
+    finalBuffer += text + '\n';
+    // ★ textContentで設定し直すことでDOMをクリーンに保つ
+    finalArea.textContent = finalBuffer;
+    finalArea.scrollTop   = finalArea.scrollHeight;
+}
 
-    //確定テキストをDOMに反映（interimNodeは末尾に維持）
-    function renderFinal() {
-        // interimNodeを一時退避
-        removeInterimNode();
-        finalArea.textContent = finalBuffer;
-    }
-
-    function setStatus(state) {
-        const states = {
-            idle:       { text: '待機中',dot: false },
-            recording:  { text: '● 録音中', dot: true  },
-            connecting: { text: '接続中…',  dot: false },
-            error:      { text: '⚠ エラー', dot: false },
-        };
-        const s = states[state] || states.idle;
-        statusText.textContent = s.text;
-        statusDot.classList.toggle('recording', s.dot);
-    }
+// ★ 1セッション分のrecognitionを起動
+function startSession() {
+    recognition = createRecognition();
 
     recognition.onstart = () => {
-        isRecognizing = true;
         setStatus('recording');
-        startBtn.disabled = true;
-        stopBtn.disabled  = false;
-        finalArea.contentEditable = 'false';
-        editBadge.style.display   = 'none';
     };
 
-    recognition.onerror = (event) => {
-        if (event.error !== 'no-speech') {
-            console.error('認識エラー:', event.error);
-            setStatus('error');
+    recognition.onerror = (e) => {
+        if (e.error === 'no-speech' || e.error === 'aborted') return;
+        console.warn('error:', e.error);
+        setStatus('error');
+    };
+
+    recognition.onresult = (event) => {
+        // ★ continuous:false なので results は常に新鮮、インデックス問題なし
+        let interimText = '';
+        for (let i = 0; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                const t = event.results[i][0].transcript.trim();
+                if (t) appendFinal(t);
+                setInterim('');
+            } else {
+                interimText += event.results[i][0].transcript;
+            }
         }
+        if (interimText) setInterim(interimText);
     };
 
     recognition.onend = () => {
-        removeInterimNode(); // ★ 切断時にinterim表示を消す
-
+        removeInterimNode();
         if (isRecognizing) {
+            // ★ 自前で再起動（新しいインスタンスで）
             setStatus('connecting');
-            justReconnected = true;
             setTimeout(() => {
-                if (isRecognizing) recognition.start();
-            }, 300);
+                if (isRecognizing) startSession();
+            }, 200);
         } else {
             setStatus('idle');
             startBtn.disabled = false;
             stopBtn.disabled  = true;
-            // ★ 停止時：contentEditableをtrueにしてテキストを編集可能に
             finalArea.contentEditable = 'true';
             editBadge.style.display   = 'block';
-            lastFinalText   = '';
-            justReconnected = false;
         }
     };
 
-    recognition.onresult = (event) => {
-        let interimText = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-
-            if (event.results[i].isFinal) {
-                const trimmed = transcript.trim();
-                if (!trimmed) continue;
-
-                // 重複スキップ
-                if (justReconnected && trimmed === lastFinalText) {
-                    justReconnected = false;
-                    continue;
-                }
-                if (trimmed === lastFinalText) continue;
-
-                //★ bufferに追記してDOMを更新
-                finalBuffer += trimmed + '\n';
-                renderFinal();
-                finalArea.scrollTop = finalArea.scrollHeight;
-                lastFinalText   = trimmed;
-                justReconnected = false;} else {
-                interimText += transcript;
-            }
-        }
-
-        // ★ interim を確定エリアの末尾spanに表示
-        if (interimText) {
-            const node = getOrCreateInterimNode();
-            node.textContent = interimText;
-            finalArea.scrollTop = finalArea.scrollHeight;
-        } else {
-            removeInterimNode();
-        }};
-
-    startBtn.onclick = () => {
-        if (isRecognizing) return;
-        lastFinalText   = '';
-        justReconnected = false;
-        // ★ 編集後の内容をbufferに同期
-        finalBuffer   = finalArea.textContent;
-        isRecognizing = true;
+    try {
         recognition.start();
-    };
+    } catch(e) {
+        console.warn('start error:', e);
+    }
+}
 
-    stopBtn.onclick = () => {
-        isRecognizing = false;
-        recognition.stop();
-    };
+startBtn.onclick = () => {
+    if (isRecognizing) return;
+    //編集内容をbufferに同期
+    finalBuffer = finalArea.textContent;
+    isRecognizing = true;
+    startBtn.disabled = true;
+    stopBtn.disabled  = false;
+    finalArea.contentEditable = 'false';
+    editBadge.style.display   = 'none';
+    startSession();
+};
 
-    document.getElementById('clear-btn').onclick = () => {
-        if (!confirm('テキストをクリアしますか？')) return;
-        finalBuffer = '';
-        finalArea.textContent = '';
-        lastFinalText = '';
-    };
+stopBtn.onclick = () => {
+    isRecognizing = false;
+    if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+        recognition = null;
+    }
+};
 
-    document.getElementById('copy-btn').onclick = async () => {
-        // ★ bufferからコピー（interimNodeの文字を含めない）
-        const text = finalBuffer.trim();
-        if (!text) { alert('コピーするテキストがありません'); return; }
-        try {
-            await navigator.clipboard.writeText(text);
-            alert('コピーしました ✓');
-        } catch {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            alert('コピーしました ✓');
-        }
-    };
+document.getElementById('clear-btn').onclick = () => {
+    if (!confirm('テキストをクリアしますか？')) return;
+    finalBuffer = '';
+    finalArea.textContent = '';
+};
 
-    document.getElementById('save-btn').onclick = () => {
-        const text = finalBuffer.trim();
-        if (!text) { alert('保存するテキストがありません'); return; }
-        const now  = new Date();
-        const name = `transcript_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
-        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href     = url;
-        a.download = name;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
+document.getElementById('copy-btn').onclick = async () => {
+    const text = finalBuffer.trim();
+    if (!text) { alert('コピーするテキストがありません'); return; }
+    try {
+        await navigator.clipboard.writeText(text);
+        alert('コピーしました ✓');
+    } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('コピーしました ✓');
+    }
+};
 
-    document.getElementById('reset-btn').onclick = () => {
-        if (!confirm('ページをリセットしますか？\n（入力内容はすべて消えます）')) return;
-        window.location.reload();
-    };
+document.getElementById('save-btn').onclick = () => {
+    const text = finalBuffer.trim();
+    if (!text) { alert('保存するテキストがありません'); return; }
+    const now  = new Date();
+    const name = `transcript_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a'); a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
+};
 
-    finalArea.addEventListener('blur', () => {
-        if (finalArea.contentEditable === 'true') {
-            editBadge.style.display = 'none';// ★ 編集内容をbufferに同期
-            finalBuffer = finalArea.textContent;
-        }
-    });
-    finalArea.addEventListener('focus', () => {
-        if (finalArea.contentEditable === 'true') {
-            editBadge.style.display = 'block';
-        }
-    });
+document.getElementById('reset-btn').onclick = () => {
+    if (!confirm('ページをリセットしますか？')) return;
+    window.location.reload();
+};
+
+finalArea.addEventListener('blur', () => {
+    if (finalArea.contentEditable === 'true') {
+        finalBuffer = finalArea.textContent;editBadge.style.display = 'none';
+    }
+});
+finalArea.addEventListener('focus', () => {
+    if (finalArea.contentEditable === 'true') editBadge.style.display = 'block';
+});
 </script>
 </body>
 </html>
