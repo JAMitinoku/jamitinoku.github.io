@@ -5,10 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>音声認識エディタ</title>
     <style>
-        /*===== リセット・基本 ===== */
         *, *::before, *::after {
             box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent; /* タップ時の青枠を除去 */
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
@@ -16,13 +15,12 @@
             margin: 0;
             display: flex;
             flex-direction: column;
-            height: 100dvh; /* 仮想キーボード考慮の動的ビューポート */
+            height: 100dvh;
             background: #1a1a2e;
             color: #eee;
             overflow: hidden;
         }
 
-        /* ===== ステータスバー ===== */
         #status-bar {
             background: #16213e;
             padding: 8px 14px;
@@ -40,29 +38,23 @@
             height: 10px;
             border-radius: 50%;
             background: #e74c3c;
-            flex-shrink: 0;transition: background 0.3s;box-shadow: 0 0 0 0rgba(231, 76, 60, 0);
+            flex-shrink: 0;transition: background 0.3s;
         }
 
-        /*録音中アニメーション */
         #status-dot.recording {
             background: #2ecc71;
             animation: pulse 1.4s infinite;
-            box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7);
+            box-shadow: 0 0 0 0rgba(46, 204, 113, 0.7);
         }
 
         @keyframes pulse {
-            0%{ box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
+            0%   { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); }
             70%  { box-shadow: 0 0 0 8px rgba(46, 204, 113, 0); }
             100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); }
         }
 
-        #status-text {
-            font-size: 0.85em;
-            color: #aaa;
-            flex: 1;
-        }
+        #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
 
-        /* ===== コントロールエリア ===== */
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -73,7 +65,6 @@
             flex-shrink: 0;
         }
 
-        /* メインボタン行（開始・停止を大きく） */
         #main-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -88,7 +79,7 @@
             border-radius: 12px;
             cursor: pointer;
             transition: all 0.15s;
-            min-height: 54px; /* タップターゲット確保 */
+            min-height: 54px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -97,23 +88,14 @@
             user-select: none;
         }
 
-        #start-btn {
-            background: #27ae60;
-            color: white;
-        }
-
+        #start-btn { background: #27ae60; color: white; }
         #start-btn:active { background: #1e8449; transform: scale(0.97); }
         #start-btn:disabled { background: #555; color: #888; }
 
-        #stop-btn {
-            background: #e74c3c;
-            color: white;
-        }
-
-        #stop-btn:active  { background: #c0392b; transform: scale(0.97); }
+        #stop-btn { background: #e74c3c; color: white; }
+        #stop-btn:active { background: #c0392b; transform: scale(0.97); }
         #stop-btn:disabled { background: #555; color: #888; }
 
-        /* サブボタン行*/
         #sub-buttons {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -128,7 +110,7 @@
             background: #0f3460;
             color: #ddd;
             cursor: pointer;
-            min-height: 48px; /* タップターゲット確保 */
+            min-height: 48px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -139,13 +121,11 @@
         }
 
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
-
         .sub-btn .icon { font-size: 1.3em; line-height: 1; }
 
-        /* セレクト行 */
         #selects {
             display: grid;
-            grid-template-columns:1fr 1fr;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
 
@@ -165,7 +145,6 @@
             min-height: 44px;
         }
 
-        /* ===== コンテンツエリア ===== */
         #main-container {
             flex: 1;
             display: flex;
@@ -176,7 +155,6 @@
             min-height: 0;
         }
 
-        /*未確定テキストエリア */
         #interim-area {
             height: 70px;
             background: #16213e;
@@ -196,7 +174,6 @@
             color: #555;
         }
 
-        /* 確定テキストエリア */
         #final-area {
             flex: 1;
             background: #16213e;
@@ -212,14 +189,12 @@
             min-height: 0;
         }
 
-        /*編集モード */
         #final-area[contenteditable="true"] {
             background: #1a1a00;
             border-color: #f1c40f;
             caret-color: #f1c40f;
         }
 
-        /* 編集中バッジ */
         #edit-badge {
             display: none;
             position: fixed;
@@ -235,79 +210,40 @@
             z-index: 100;
         }
 
-        /*===== タブレット対応（768px以上） ===== */
         @media (min-width: 768px) {
-            #controls {
-                flex-direction: row;
-                flex-wrap: wrap;
-                align-items: center;
-                padding: 12px 16px;
-            }
-
-            #main-buttons {
-                grid-template-columns: 180px 180px;
-                flex-shrink: 0;
-            }
-
-            #sub-buttons {
-                grid-template-columns: repeat(4, 90px);
-                flex-shrink: 0;
-            }
-
-            #selects {
-                grid-template-columns: 150px 150px;
-                flex-shrink: 0;
-            }
-
+            #controls { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
+            #main-buttons { grid-template-columns: 180px 180px; flex-shrink: 0; }
+            #sub-buttons { grid-template-columns: repeat(4, 90px); flex-shrink: 0; }
+            #selects { grid-template-columns: 150px 150px; flex-shrink: 0; }
             #interim-area { height: 90px; font-size: 1.0em; }
-            #final-area   { font-size: 1.15em; }
+            #final-area { font-size: 1.15em; }
         }
 
-        /* ===== 横向き対応 ===== */
         @media (orientation: landscape) and (max-height: 500px) {
             #controls { padding: 6px 10px; gap: 6px; }
-
             #start-btn, #stop-btn { padding: 10px; min-height: 44px; font-size: 1.0em; }
             .sub-btn { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
-
             #interim-area { height: 50px; }}
     </style>
 </head>
 <body>
 
-<!-- ステータスバー -->
 <div id="status-bar">
     <div id="status-dot"></div>
     <span id="status-text">待機中</span>
 </div>
 
-<!-- コントロール -->
 <div id="controls">
-
     <div id="main-buttons">
-        <button id="start-btn">
-            <span>🎙️</span> 開始
-        </button>
-        <button id="stop-btn" disabled>
-            <span>⏹️</span> 停止
-        </button>
+        <button id="start-btn">🎙️ 開始</button>
+        <button id="stop-btn" disabled>⏹️ 停止</button>
     </div>
-
     <div id="sub-buttons">
-        <button class="sub-btn" id="clear-btn">
-            <span class="icon">🗑️</span>クリア
-        </button>
-        <button class="sub-btn" id="copy-btn">
-            <span class="icon">📋</span>コピー
-        </button>
-        <button class="sub-btn" id="save-btn">
-            <span class="icon">💾</span>保存
-        </button>
-        <button class="sub-btn" id="reset-btn">
-            <span class="icon">🔄</span>リセット
-        </button>
+        <button class="sub-btn" id="clear-btn"><span class="icon">🗑️</span>クリア</button>
+        <button class="sub-btn" id="copy-btn"><span class="icon">📋</span>コピー</button>
+        <button class="sub-btn" id="save-btn"><span class="icon">💾</span>保存</button>
+        <button class="sub-btn" id="reset-btn"><span class="icon">🔄</span>リセット</button>
     </div>
-
     <div id="selects">
         <select id="sensitivity">
             <option>通常</option>
@@ -317,50 +253,49 @@
         <select id="boost">
             <option>ブースト1</option>
             <option>50</option>
-            <option>100</option></select>
-    </div>
-
+            <option>100</option>
+        </select></div>
 </div>
 
-<!-- テキストエリア -->
 <div id="main-container">
     <div id="interim-area" data-placeholder="音声認識中のテキストがここに表示されます…"></div>
     <div id="final-area" contenteditable="false"></div>
 </div>
 
-<!-- 編集中バッジ -->
 <div id="edit-badge">✏️ 編集中</div>
 
 <script>
-    //===== 初期化 =====
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
         alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
     }
 
-    const recognition = new SpeechRecognition();
-    let isRecognizing = false;
+    const recognition  = new SpeechRecognition();
+    let isRecognizing  = false;
 
-    const finalArea    = document.getElementById('final-area');
-    const interimArea  = document.getElementById('interim-area');
-    const statusDot    = document.getElementById('status-dot');
-    const statusText   = document.getElementById('status-text');
-    const editBadge    = document.getElementById('edit-badge');
-    const startBtn     = document.getElementById('start-btn');
-    const stopBtn      = document.getElementById('stop-btn');
+    // ★ 修正の核心：確定済みインデックスを記憶する変数
+    let lastFinalIndex = 0;
 
-    recognition.lang            = 'ja-JP';
-    recognition.continuous      = true;
-    recognition.interimResults  = true;
+    const finalArea   = document.getElementById('final-area');
+    const interimArea = document.getElementById('interim-area');
+    const statusDot   = document.getElementById('status-dot');
+    const statusText  = document.getElementById('status-text');
+    const editBadge   = document.getElementById('edit-badge');
+    const startBtn    = document.getElementById('start-btn');
+    const stopBtn     = document.getElementById('stop-btn');
 
-    // ===== ステータス更新ヘルパー =====
+    recognition.lang           = 'ja-JP';
+    recognition.continuous     = true;
+    recognition.interimResults = true;
+
+    // ===== ステータス更新 =====
     function setStatus(state) {
         const states = {
-            idle:{ text: '待機中',    dot: false },
-            recording:  { text: '● 録音中',  dot: true  },
-            connecting: { text: '接続中…',   dot: false },
-            error:      { text: '⚠ エラー',  dot: false },
+            idle:       { text: '待機中',dot: false },
+            recording:  { text: '● 録音中', dot: true  },
+            connecting: { text: '接続中…',  dot: false },
+            error:      { text: '⚠ エラー', dot: false },
         };
         const s = states[state] || states.idle;
         statusText.textContent = s.text;
@@ -378,7 +313,6 @@
     };
 
     recognition.onerror = (event) => {
-        // no-speech は無視（沈黙時に頻発するため）
         if (event.error !== 'no-speech') {
             console.error('認識エラー:', event.error);
             setStatus('error');
@@ -387,16 +321,17 @@
 
     recognition.onend = () => {
         if (isRecognizing) {
-            // 自動再接続
             setStatus('connecting');
+            //★ 再接続時にインデックスをリセット
+            lastFinalIndex = 0;
             setTimeout(() => {
                 if (isRecognizing) recognition.start();
-            }, 300); // 短いウェイトで安定再接続
+            }, 300);
         } else {
             setStatus('idle');
             startBtn.disabled = false;
             stopBtn.disabled  = true;
-            finalArea.contentEditable = 'true'; // 停止中のみ編集可
+            finalArea.contentEditable = 'true';
             editBadge.style.display   = 'block';
         }
     };
@@ -407,8 +342,13 @@
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
+
             if (event.results[i].isFinal) {
-                if (transcript.trim()) finalTrans += transcript.trim() + '\n';
+                //★ lastFinalIndex より大きいものだけ追記（重複防止）
+                if (i >= lastFinalIndex) {
+                    if (transcript.trim()) finalTrans += transcript.trim() + '\n';
+                    lastFinalIndex = i + 1;
+                }
             } else {
                 interimText += transcript;
             }
@@ -425,7 +365,9 @@
     // ===== ボタン操作 =====
     startBtn.onclick = () => {
         if (isRecognizing) return;
-        isRecognizing = true;
+        // ★ 開始時もインデックスをリセット
+        lastFinalIndex = 0;
+        isRecognizing  = true;
         recognition.start();
     };
 
@@ -447,7 +389,6 @@
             await navigator.clipboard.writeText(text);
             alert('コピーしました ✓');
         } catch {
-            // フォールバック（一部Android対応）
             const ta = document.createElement('textarea');
             ta.value = text;
             document.body.appendChild(ta);
@@ -461,32 +402,26 @@
     document.getElementById('save-btn').onclick = () => {
         const text = finalArea.innerText.trim();
         if (!text) { alert('保存するテキストがありません'); return; }
-
-        //ファイル名に日時を付与
-        const now= new Date();
+        const now  = new Date();
         const name = `transcript_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
-
         const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href     = url;
         a.download = name;
         a.click();
-        URL.revokeObjectURL(url); // メモリ解放
+        URL.revokeObjectURL(url);
     };
 
     document.getElementById('reset-btn').onclick = () => {
         if (!confirm('ページをリセットしますか？\n（入力内容はすべて消えます）')) return;
         window.location.reload();
-    };// 編集終了時にバッジ更新
+    };
+
     finalArea.addEventListener('blur', () => {
-        if (finalArea.contentEditable === 'true') {
-            editBadge.style.display = 'none';
-        }
+        if (finalArea.contentEditable === 'true') editBadge.style.display = 'none';
     });finalArea.addEventListener('focus', () => {
-        if (finalArea.contentEditable === 'true') {
-            editBadge.style.display = 'block';
-        }
+        if (finalArea.contentEditable === 'true') editBadge.style.display = 'block';
     });
 </script>
 </body>
