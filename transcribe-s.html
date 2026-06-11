@@ -8,39 +8,64 @@
         *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans','Noto Sans JP', sans-serif;
-            margin: 0; display: flex; flex-direction: column;
-            height: 100dvh; background: #1a1a2e; color: #eee; overflow: hidden;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            background: #1a1a2e;
+            color: #eee;
+            overflow: hidden;
         }
         #status-bar {
-            background: #16213e; padding: 8px 14px;
-            display: flex; align-items: center; gap: 8px;
-            border-bottom: 1px solid #0f3460; min-height: 40px; flex-shrink: 0;
+            background: #16213e;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid #0f3460;
+            min-height: 40px;
+            flex-shrink: 0;
         }
         #status-dot {
-            width: 10px; height: 10px; border-radius: 50%;
-            background: #e74c3c; flex-shrink: 0; transition: background 0.3s;
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #e74c3c;
+            flex-shrink: 0; transition: background 0.3s;
         }
         #status-dot.recording { background: #2ecc71; animation: pulse 1.4s infinite; }
-        #status-dot.waiting { background: #f39c12; }
+        #status-dot.waiting{ background: #f39c12; }
         @keyframes pulse {
-            0%{ box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
-            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0);}
+            0%   { box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
+            70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0);   }
             100% { box-shadow: 0 0 0 0   rgba(46,204,113,0);   }
         }
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
         #retry-count { font-size: 0.75em; color: #666; }
         #controls {
-            background: #16213e; padding: 10px 12px;
-            display: flex; flex-direction: column; gap: 10px;
-            border-bottom: 2px solid #0f3460; flex-shrink: 0;
+            background: #16213e;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-bottom: 2px solid #0f3460;
+            flex-shrink: 0;
         }
         #main-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         #start-btn, #stop-btn {
-            padding: 16px 10px; font-size: 1.1em; font-weight: bold;
-            border: none; border-radius: 12px; cursor: pointer;
-            transition: all 0.15s; min-height: 54px;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
-            -webkit-user-select: none; user-select: none;
+            padding: 16px 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            -webkit-user-select: none;
+            user-select: none;
         }
         #start-btn          { background: #27ae60; color: white; }
         #start-btn:active{ background: #1e8449; transform: scale(0.97); }
@@ -48,70 +73,113 @@
         #stop-btn           { background: #e74c3c; color: white; }
         #stop-btn:active    { background: #c0392b; transform: scale(0.97); }
         #stop-btn:disabled  { background: #555; color: #888; }
-        #sub-buttons { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+        #sub-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
         .sub-btn {
-            padding: 12px 4px; font-size: 0.78em;
-            border: 1px solid #0f3460; border-radius: 10px;
-            background: #0f3460; color: #ddd; cursor: pointer;
-            min-height: 48px; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; gap: 3px;
-            -webkit-user-select: none; user-select: none; transition: all 0.15s;
+            padding: 12px 4px;
+            font-size: 0.78em;
+            border: 1px solid #0f3460;
+            border-radius: 10px;
+            background: #0f3460;
+            color: #ddd;
+            cursor: pointer;
+            min-height: 48px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            -webkit-user-select: none;
+            user-select: none; transition: all 0.15s;
         }
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
-        .sub-btn .icon{ font-size: 1.3em; line-height: 1; }
+        .sub-btn .icon  { font-size: 1.3em; line-height: 1; }
         #selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         select {
-            padding: 10px 8px; border-radius: 8px;
-            border: 1px solid #0f3460; background: #0f3460; color: #ddd;
-            font-size: 0.85em; -webkit-appearance: none; appearance: none;
+            padding: 10px 8px;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+            background: #0f3460;
+            color: #ddd;
+            font-size: 0.85em;
+            -webkit-appearance: none;
+            appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23aaa' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 10px center;
-            padding-right: 28px; min-height: 44px;}
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            padding-right: 28px;
+            min-height: 44px;
+        }
         #main-container {
-            flex: 1; display: flex; flex-direction: column;
-            padding: 10px; overflow: hidden; min-height: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            overflow: hidden;
+            min-height: 0;
         }
         #final-label {
-            font-size: 0.72em; color: #888;
-            margin-bottom: 4px; padding-left: 2px; flex-shrink: 0;
+            font-size: 0.72em;
+            color: #888;
+            margin-bottom: 4px;
+            padding-left: 2px;
+            flex-shrink: 0;
         }
         #final-area {
-            flex: 1; background: #16213e; padding: 12px;
-            border: 1px solid #0f3460; border-radius: 10px;
-            overflow-y: auto; -webkit-overflow-scrolling: touch;
-            font-size: 1.05em; line-height: 1.8;
-            word-break: break-all; min-height: 0;
-            outline: none; white-space: pre-wrap;}
+            flex: 1;
+            background: #16213e;
+            padding: 12px;
+            border: 1px solid #0f3460;
+            border-radius: 10px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            font-size: 1.05em;
+            line-height: 1.8;
+            word-break: break-all;
+            min-height: 0;
+            outline: none;
+            white-space: pre-wrap;
+        }
         #final-area[contenteditable="true"] {
-            background: #1a1a00; border-color: #f1c40f; caret-color: #f1c40f;
+            background: #1a1a00;
+            border-color: #f1c40f;
+            caret-color: #f1c40f;
         }
         #interim-node { color: #6a9fd8; font-style: italic; }
         #edit-badge {
-            display: none; position: fixed; bottom: 20px; right: 16px;
-            background: #f1c40f; color: #333; padding: 6px 12px;
-            border-radius: 20px; font-size: 0.78em; font-weight: bold;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.4); z-index: 100;
+            display: none;
+            position: fixed;
+            bottom: 20px; right: 16px;
+            background: #f1c40f;
+            color: #333;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.78em;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            z-index: 100;
         }
         @media (min-width: 768px) {
             #controls{ flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
             #main-buttons  { grid-template-columns: 180px 180px; flex-shrink: 0; }
-            #sub-buttons   { grid-template-columns: repeat(4,90px); flex-shrink: 0; }
+            #sub-buttons   { grid-template-columns: repeat(4, 90px); flex-shrink: 0; }
             #selects       { grid-template-columns: 150px 150px; flex-shrink: 0; }
             #final-area    { font-size: 1.15em; }
         }
         @media (orientation: landscape) and (max-height: 500px) {
-            #controls      { padding: 6px 10px; gap: 6px; }
+            #controls { padding: 6px 10px; gap: 6px; }
             #start-btn, #stop-btn { padding: 10px; min-height: 44px; font-size: 1.0em; }
-            .sub-btn       { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
+            .sub-btn { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
         }
     </style>
 </head>
 <body>
+
 <div id="status-bar">
     <div id="status-dot"></div>
     <span id="status-text">待機中</span>
     <span id="retry-count"></span>
 </div>
+
 <div id="controls">
     <div id="main-buttons">
         <button id="start-btn">🎙️ 開始</button>
@@ -128,6 +196,7 @@
         <select id="boost"><option>ブースト1</option><option>50</option><option>100</option></select>
     </div>
 </div>
+
 <div id="main-container">
     <div id="final-label">📝 確定テキスト（停止中に編集可）</div>
     <div id="final-area" contenteditable="false"></div>
@@ -136,32 +205,23 @@
 
 <script>
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (!SpeechRecognition) alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
+if (!SpeechRecognition) {
+    alert('このブラウザは音声認識に対応していません。\nChromeをお試しください。');
+}
 
-/* ══════════════════════════════════════════
-   設計：スロット A / B を交互に使い回す
-   ・常に片方が認識中
-   ・もう片方は onend が来たら即start() して待機
-   ・activeSlot が onresult を処理する
-══════════════════════════════════════════ */
-const SLOTS     = [null, null]; // slot[0], slot[1]
-letactiveSlot    = 0;        // 今onresult を処理するスロット番号
-let   isRecognizing = false;
-let   finalBuffer   = '';
-let   lastInterim   = '';
-let   interimNode   = null;
-let   retryCount    = 0;
-let   wakeLock      = null;
+/*── 状態 ── */
+let recognition= null;
+let isRecognizing = false;
+let finalBuffer   = '';
+let interimNode   = null;
+let retryCount    = 0;
+let retryTimer    = null;
 
-const finalArea  = document.getElementById('final-area');
-const statusDot  = document.getElementById('status-dot');
-const statusText = document.getElementById('status-text');
-const retryEl= document.getElementById('retry-count');
-const editBadge  = document.getElementById('edit-badge');
-const startBtn   = document.getElementById('start-btn');
-const stopBtn    = document.getElementById('stop-btn');
+// ★ 未確定ドロップ救済用：最後に受け取った interim を常に保持
+let lastInterim   = '';
 
 /* ── Wake Lock ── */
+let wakeLock = null;
 async function requestWakeLock() {
     if (!('wakeLock' in navigator)) return;
     try {
@@ -173,17 +233,26 @@ async function releaseWakeLock() {
     if (wakeLock) { try { await wakeLock.release(); } catch(e) {} wakeLock = null; }
 }
 
-/* ── ステータス── */
-function setStatus(s, detail) {
-    const m = {
+/* ── DOM ── */
+const finalArea  = document.getElementById('final-area');
+const statusDot  = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const retryEl    = document.getElementById('retry-count');
+const editBadge  = document.getElementById('edit-badge');
+const startBtn   = document.getElementById('start-btn');
+const stopBtn    = document.getElementById('stop-btn');
+
+/* ── ステータス ── */
+function setStatus(state, detail) {
+    const map = {
         idle:{ text: '待機中',cls: ''},
-        recording: { text: '● 録音中',       cls: 'recording' },
-        reconnect: { text: '再接続中…',      cls: 'waiting'   },
-        denied:    { text: '🚫 マイク拒否',  cls: ''          },
-    };
-    const r = m[s] || m.idle;
-    statusText.textContent = detail ? `${r.text}（${detail}）` : r.text;
-    statusDot.className = r.cls;
+        recording: { text: '● 録音中',     cls: 'recording' },
+        reconnect: { text: '再接続中…',    cls: 'waiting'   },
+        error:     { text: '⚠ エラー',     cls: ''          },
+        denied:    { text: '🚫 マイク拒否', cls: ''          },};
+    const s = map[state] || map.idle;
+    statusText.textContent = detail ? `${s.text}（${detail}）` : s.text;
+    statusDot.className = s.cls;
 }
 
 /* ── interim DOM ── */
@@ -192,7 +261,7 @@ function removeInterimNode() {
     interimNode = null;
 }
 function setInterim(text) {
-    lastInterim = text;
+    lastInterim = text; // ★ 常に最新interimを記憶
     if (!text) { removeInterimNode(); return; }
     if (!interimNode) {
         interimNode = document.createElement('span');
@@ -213,123 +282,107 @@ function appendFinal(text) {
     finalArea.scrollTop   = finalArea.scrollHeight;
 }
 
-/* ── interim 救済 ── */
+/* ── ★ interim救済：onend時に未確定テキストを確定扱いで保存 ── */
 function salvageInterim() {
     const t = lastInterim.trim();
     lastInterim = '';
-    if (t) appendFinal(t);
+    if (t) {
+        appendFinal(t);
+        console.debug('salvaged interim:', t);
+    }
 }
 
-/* ── インスタンス破棄 ── */
-function destroySlot(i) {
-    const r = SLOTS[i];
-    if (!r) return;
-    r.onstart = r.onend = r.onerror = r.onresult = null;
-    try { r.abort(); } catch(e) {}SLOTS[i] = null;
-}
-
-/* ══════════════════════════════════════════
-   ★ スロット i用のインスタンスを生成・起動
-══════════════════════════════════════════ */
-function launchSlot(i) {
+/* ── セッション起動 ── */
+function startSession() {
     if (!isRecognizing) return;
-    destroySlot(i);
 
-    const rec = new SpeechRecognition();
-    rec.lang= 'ja-JP';
-    rec.continuous= true;
-    rec.interimResults  = true;
-    rec.maxAlternatives = 1;
-    SLOTS[i] = rec;
+    // 前インスタンスを完全破棄
+    if (recognition) {
+        recognition.onstart = recognition.onend =recognition.onerror = recognition.onresult = null;
+        try { recognition.abort(); } catch(e) {}
+        recognition = null;
+    }
 
-    rec.onstart = () => {
-        if (i === activeSlot) {
-            retryCount = 0;
-            retryEl.textContent = '';
-            setStatus('recording');}
+    recognition = new SpeechRecognition();
+    recognition.lang= 'ja-JP';
+    recognition.continuous      = true;  // ★ trueで途中切れを減らす
+    recognition.interimResults= true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+        retryCount = 0;
+        retryEl.textContent = '';
+        setStatus('recording');
     };
 
-    rec.onresult = (event) => {
-        if (i !== activeSlot) return;
+    recognition.onresult = (event) => {
         let interim = '';
-        for (let j = event.resultIndex; j < event.results.length; j++) {
-            if (event.results[j].isFinal) {
-                appendFinal(event.results[j][0].transcript);
-                lastInterim = '';} else {
-                interim += event.results[j][0].transcript;
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                appendFinal(event.results[i][0].transcript);
+                lastInterim = ''; // 確定したので interim履歴をリセット
+            } else {
+                interim += event.results[i][0].transcript;
             }
         }
         setInterim(interim);
     };
 
-    rec.onerror = (e) => {
-        if (e.error === 'no-speech' || e.error === 'aborted') return;
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+    recognition.onerror = (e) => {
+|         if (e.error === 'no-speech' || e.error === 'aborted') return; |
+|         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { |
             setStatus('denied'); forceStop(); return;
         }
-        if (i === activeSlot) setStatus('reconnect', e.error);
+        console.warn('SR error:', e.error);
+        setStatus('reconnect', e.error);
     };
 
-    rec.onend = () => {
+    recognition.onend = () => {
+        // ★ セッションが切れた瞬間に interim を救済
+        salvageInterim();
+        removeInterimNode();
+
         if (!isRecognizing) { onStopped(); return; }
 
-        if (i === activeSlot) {
-            salvageInterim();
-            removeInterimNode();
-            retryCount++;
-            retryEl.textContent = retryCount > 1 ? `再接続${retryCount}回` : '';
+        retryCount++;
+        retryEl.textContent = retryCount > 1 ? `再接続${retryCount}回` : '';
+        setStatus('reconnect');
 
-            const other = 1 - i;
-            if (SLOTS[other]) {
-                activeSlot = other;
-                setStatus('recording');
-                setTimeout(() => launchSlot(i), 0);
-            } else {
-                setStatus('reconnect');
-                setTimeout(() => {
-                    activeSlot = i;
-                    launchSlot(i);
-                    launchSlot(1 - i);
-                }, 0);
-            }
-        } else {
-            setTimeout(() => launchSlot(i), 0);
-        }
+        // 連続エラーのときだけ少し待つ、通常は即再起動
+        const delay = retryCount > 10 ? 500 : retryCount > 3 ? 200 : 0;
+        retryTimer = setTimeout(startSession, delay);
     };
 
     try {
-        rec.start();
+        recognition.start();
     } catch(e) {
-        console.warn(`slot${i} start failed:`, e);
-        SLOTS[i] = null;
-        setTimeout(() => launchSlot(i), 300);
+        console.warn('start() threw:', e);
+        retryTimer = setTimeout(startSession, 300);
     }
-}
-
-/* ── 全スロット起動 ── */
-function startAll() {
-    activeSlot = 0;
-    launchSlot(0);
-    setTimeout(() => launchSlot(1), 500);
 }
 
 /* ── 強制停止 ── */
 function forceStop() {
     isRecognizing = false;
-    salvageInterim();
-    destroySlot(0);
-    destroySlot(1);
+    clearTimeout(retryTimer);
+    salvageInterim(); // ★ 強制停止時も救済
+    if (recognition) {
+        recognition.onstart = recognition.onend =
+        recognition.onerror = recognition.onresult = null;
+        try { recognition.abort(); } catch(e) {}
+        recognition = null;
+    }
     onStopped();
 }
 
-/* ── 停止後 UI ── */
+/* ── 停止後UI ── */
 function onStopped() {
     releaseWakeLock();
     removeInterimNode();
     setStatus('idle');
-    retryEl.textContent       = '';
-    startBtn.disabled         = false;
-    stopBtn.disabled          = true;
+    retryEl.textContent   = '';
+    startBtn.disabled     = false;
+    stopBtn.disabled      = true;
     finalArea.contentEditable = 'true';
     editBadge.style.display   = 'block';
 }
@@ -341,24 +394,25 @@ startBtn.onclick = async () => {
     lastInterim   = '';
     isRecognizing = true;
     retryCount    = 0;
-    startBtn.disabled         = true;
-    stopBtn.disabled          = false;
+    startBtn.disabled = true;
+    stopBtn.disabled  = false;
     finalArea.contentEditable = 'false';
     editBadge.style.display   = 'none';
     await requestWakeLock();
-    startAll();
+    startSession();
 };
 
 /* ── 停止ボタン ── */
 stopBtn.onclick = () => {
     if (!isRecognizing) return;
     isRecognizing = false;
-    salvageInterim();
-    [0, 1].forEach(i => {
-        if (SLOTS[i]) SLOTS[i].onend = null;
-    });
-    destroySlot(0);
-    destroySlot(1);
+    clearTimeout(retryTimer);
+    salvageInterim(); // ★ 停止時も救済
+    if (recognition) {
+        recognition.onend = null; // 誤再起動防止
+        try { recognition.stop(); } catch(e) {}
+        recognition = null;
+    }
     onStopped();
 };
 
@@ -366,45 +420,53 @@ stopBtn.onclick = () => {
 document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && isRecognizing) {
         if (!wakeLock) await requestWakeLock();
-        destroySlot(0);
-        destroySlot(1);
-        lastInterim = '';
-        startAll();
+        clearTimeout(retryTimer);
+        startSession();
     }
 });
 
 /* ── サブボタン ── */
 document.getElementById('clear-btn').onclick = () => {
     if (!confirm('テキストをクリアしますか？')) return;
-    finalBuffer = ''; lastInterim = '';
-    removeInterimNode(); finalArea.textContent = '';
+    finalBuffer = '';
+    lastInterim = '';
+    removeInterimNode();
+    finalArea.textContent = '';
 };
+
 document.getElementById('copy-btn').onclick = async () => {
     const text = finalBuffer.trim();
     if (!text) { alert('コピーするテキストがありません'); return; }
-    try { await navigator.clipboard.writeText(text); alert('コピーしました ✓'); }
-    catch {
+    try {
+        await navigator.clipboard.writeText(text);
+        alert('コピーしました ✓');
+    } catch {
         const ta = document.createElement('textarea');
         ta.value = text; document.body.appendChild(ta);
         ta.select(); document.execCommand('copy');
-        document.body.removeChild(ta); alert('コピーしました ✓');
+        document.body.removeChild(ta);
+        alert('コピーしました ✓');
     }
 };
+
 document.getElementById('save-btn').onclick = () => {
     const text = finalBuffer.trim();
     if (!text) { alert('保存するテキストがありません'); return; }
-    const now = new Date(), pad = n => String(n).padStart(2,'0');
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
     const name = `transcript_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.txt`;
     const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),
+        href: URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' })),
         download: name
     });
     a.click(); URL.revokeObjectURL(a.href);
 };
+
 document.getElementById('reset-btn').onclick = () => {
     if (!confirm('ページをリセットしますか？')) return;
     window.location.reload();
 };
+
 finalArea.addEventListener('blur', () => {
     if (finalArea.contentEditable === 'true') {
         finalBuffer = finalArea.textContent;
