@@ -19,6 +19,8 @@
             color: #eee;
             overflow: hidden;
         }
+
+        /*ステータスバー */
         #status-bar {
             background: #16213e;
             padding: 8px 14px;
@@ -30,8 +32,7 @@
             flex-shrink: 0;
         }
         #status-dot {
-            width: 10px;
-            height: 10px;
+            width: 10px; height: 10px;
             border-radius: 50%;
             background: #e74c3c;
             flex-shrink: 0;transition: background 0.3s;
@@ -41,12 +42,13 @@
             animation: pulse 1.4s infinite;
         }
         @keyframes pulse {
-            0%{ box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
+            0%   { box-shadow: 0 0 0 0   rgba(46,204,113,0.7); }
             70%  { box-shadow: 0 0 0 8px rgba(46,204,113,0);   }
             100% { box-shadow: 0 0 0 0   rgba(46,204,113,0);   }
         }
         #status-text { font-size: 0.85em; color: #aaa; flex: 1; }
 
+        /* コントロール */
         #controls {
             background: #16213e;
             padding: 10px 12px;
@@ -130,53 +132,13 @@
             min-height: 44px;
         }
 
+        /* ★ メインエリア：確定テキストのみ全面表示 */
         #main-container {
             flex: 1;
             display: flex;
             flex-direction: column;
             padding: 10px;
-            gap: 10px;
             overflow: hidden;
-            min-height: 0;
-        }
-
-        /*★ 未確定エリア：認識中であることが伝わるよう色とラベルを明確化 */
-        #interim-wrapper {
-            flex-shrink: 0;
-        }
-        #interim-label {
-            font-size: 0.72em;
-            color: #888;
-            margin-bottom: 4px;
-            padding-left: 2px;
-        }
-        #interim-area {
-            height: 70px;
-            background: #0d1b2a;
-            padding: 10px 12px;
-            border: 1px solid #1a4a80;
-            border-radius: 10px;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            color: #7ec8e3;        /* ★ 認識中は水色で視認性UP */
-            font-size: 0.95em;
-            font-style: italic;
-            transition: border-color 0.3s;
-        }
-        /* ★ 認識中はボーダーを光らせる */
-        #interim-area.active {
-            border-color: #3498db;
-            box-shadow: 0 0 6px rgba(52,152,219,0.4);
-        }
-        #interim-area:empty::before {
-            content: attr(data-placeholder);
-            color: #444;
-        }
-
-        #final-wrapper {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
             min-height: 0;
         }
         #final-label {
@@ -184,7 +146,10 @@
             color: #888;
             margin-bottom: 4px;
             padding-left: 2px;
+            flex-shrink: 0;
         }
+
+        /* ★ 確定テキストエリア本体 */
         #final-area {
             flex: 1;
             background: #16213e;
@@ -194,15 +159,21 @@
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
             font-size: 1.05em;
-            line-height: 1.7;
-            white-space: pre-wrap;
+            line-height: 1.8;
             word-break: break-all;
             min-height: 0;
+            outline: none;
         }
         #final-area[contenteditable="true"] {
             background: #1a1a00;
             border-color: #f1c40f;
             caret-color: #f1c40f;
+        }
+
+        /* ★ interim テキスト用スタイル（確定エリア末尾のspan） */
+        #interim-node {
+            color: #6a9fd8;
+            font-style: italic;
         }
 
         #edit-badge {
@@ -221,18 +192,17 @@
         }
 
         @media (min-width: 768px) {
-            #controls { flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
+            #controls{ flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
             #main-buttons  { grid-template-columns: 180px 180px; flex-shrink: 0; }
             #sub-buttons   { grid-template-columns: repeat(4, 90px); flex-shrink: 0; }
             #selects       { grid-template-columns: 150px 150px; flex-shrink: 0; }
-            #interim-area  { height: 90px; font-size: 1.0em; }
             #final-area    { font-size: 1.15em; }
         }
         @media (orientation: landscape) and (max-height: 500px) {
-            #controls { padding: 6px 10px; gap: 6px; }
+            #controls{ padding: 6px 10px; gap: 6px; }
             #start-btn, #stop-btn { padding: 10px; min-height: 44px; font-size: 1.0em; }
-            .sub-btn { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
-            #interim-area { height: 50px; }}
+            .sub-btn     { padding: 8px 4px; min-height: 40px; font-size: 0.72em; }
+        }
     </style>
 </head>
 <body>
@@ -263,20 +233,14 @@
             <option>ブースト1</option>
             <option>50</option>
             <option>100</option>
-        </select></div>
+        </select>
+    </div>
 </div>
 
 <div id="main-container">
-    <!--未確定エリア -->
-    <div id="interim-wrapper">
-        <div id="interim-label">🎤 認識中（未確定）</div>
-        <div id="interim-area" data-placeholder="話しかけると、ここにリアルタイムで表示されます…"></div>
-    </div>
-    <!-- 確定エリア -->
-    <div id="final-wrapper">
-        <div id="final-label">📝 確定テキスト</div>
-        <div id="final-area" contenteditable="false"></div>
-    </div>
+    <div id="final-label">📝 確定テキスト（停止中に編集可）</div>
+    <!--★ interimはこのdiv内のspanで末尾表示 -->
+    <div id="final-area" contenteditable="false"></div>
 </div>
 <div id="edit-badge">✏️ 編集中</div>
 
@@ -291,24 +255,52 @@
     let lastFinalText   = '';
     let justReconnected = false;
 
-    const finalArea   = document.getElementById('final-area');
-    const interimArea = document.getElementById('interim-area');
-    const statusDot   = document.getElementById('status-dot');
-    const statusText  = document.getElementById('status-text');
-    const editBadge   = document.getElementById('edit-badge');
-    const startBtn    = document.getElementById('start-btn');
-    const stopBtn     = document.getElementById('stop-btn');
+    const finalArea  = document.getElementById('final-area');
+    const statusDot  = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const editBadge  = document.getElementById('edit-badge');
+    const startBtn= document.getElementById('start-btn');
+    const stopBtn    = document.getElementById('stop-btn');
 
     recognition.lang           = 'ja-JP';
     recognition.continuous     = true;
-    recognition.interimResults = true;  // ★ これがtrueでないとinterimが来ない
+    recognition.interimResults = true;
+
+    //★ 確定テキストを蓄積するための文字列（innerTextと分離して管理）
+    let finalBuffer = '';
+
+    // ★ interim表示用のspanノード（常にDOMの末尾に置く）
+    let interimNode = null;
+
+    function getOrCreateInterimNode() {
+        if (!interimNode || !finalArea.contains(interimNode)) {
+            interimNode = document.createElement('span');
+            interimNode.id = 'interim-node';
+            finalArea.appendChild(interimNode);
+        }
+        return interimNode;
+    }
+
+    function removeInterimNode() {
+        if (interimNode && finalArea.contains(interimNode)) {
+            finalArea.removeChild(interimNode);
+        }
+        interimNode = null;
+    }
+
+    //確定テキストをDOMに反映（interimNodeは末尾に維持）
+    function renderFinal() {
+        // interimNodeを一時退避
+        removeInterimNode();
+        finalArea.textContent = finalBuffer;
+    }
 
     function setStatus(state) {
         const states = {
-            idle:       { text: '待機中',    dot: false },
-            recording:  { text: '● 録音中',  dot: true  },
-            connecting: { text: '接続中…',   dot: false },
-            error:      { text: '⚠ エラー',  dot: false },
+            idle:       { text: '待機中',dot: false },
+            recording:  { text: '● 録音中', dot: true  },
+            connecting: { text: '接続中…',  dot: false },
+            error:      { text: '⚠ エラー', dot: false },
         };
         const s = states[state] || states.idle;
         statusText.textContent = s.text;
@@ -332,9 +324,7 @@
     };
 
     recognition.onend = () => {
-        //★ 終了時に未確定エリアをクリア＋スタイル解除
-        interimArea.innerText = '';
-        interimArea.classList.remove('active');
+        removeInterimNode(); // ★ 切断時にinterim表示を消す
 
         if (isRecognizing) {
             setStatus('connecting');
@@ -346,6 +336,7 @@
             setStatus('idle');
             startBtn.disabled = false;
             stopBtn.disabled  = true;
+            // ★ 停止時：contentEditableをtrueにしてテキストを編集可能に
             finalArea.contentEditable = 'true';
             editBadge.style.display   = 'block';
             lastFinalText   = '';
@@ -357,40 +348,45 @@
         let interimText = '';
 
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            // ★ trimしない生テキストを取得
             const transcript = event.results[i][0].transcript;
 
             if (event.results[i].isFinal) {
                 const trimmed = transcript.trim();
                 if (!trimmed) continue;
 
-                // 再接続直後の重複スキップ
+                // 重複スキップ
                 if (justReconnected && trimmed === lastFinalText) {
                     justReconnected = false;
                     continue;
                 }
-                //連続重複スキップ
                 if (trimmed === lastFinalText) continue;
 
-                finalArea.innerText += trimmed + '\n';
-                finalArea.scrollTop  = finalArea.scrollHeight;
+                //★ bufferに追記してDOMを更新
+                finalBuffer += trimmed + '\n';
+                renderFinal();
+                finalArea.scrollTop = finalArea.scrollHeight;
                 lastFinalText   = trimmed;
                 justReconnected = false;} else {
-                //★ interim はそのまま結合（trimしない）
                 interimText += transcript;
             }
         }
 
-        // ★ 未確定テキストをエリアに反映 ＋ activeクラスで光らせる
-        interimArea.innerText = interimText;
-        interimArea.classList.toggle('active', interimText.length > 0);
-    };
+        // ★ interim を確定エリアの末尾spanに表示
+        if (interimText) {
+            const node = getOrCreateInterimNode();
+            node.textContent = interimText;
+            finalArea.scrollTop = finalArea.scrollHeight;
+        } else {
+            removeInterimNode();
+        }};
 
     startBtn.onclick = () => {
         if (isRecognizing) return;
         lastFinalText   = '';
         justReconnected = false;
-        isRecognizing   = true;
+        // ★ 編集後の内容をbufferに同期
+        finalBuffer   = finalArea.textContent;
+        isRecognizing = true;
         recognition.start();
     };
 
@@ -401,13 +397,14 @@
 
     document.getElementById('clear-btn').onclick = () => {
         if (!confirm('テキストをクリアしますか？')) return;
-        finalArea.innerText   = '';
-        interimArea.innerText = '';
+        finalBuffer = '';
+        finalArea.textContent = '';
         lastFinalText = '';
     };
 
     document.getElementById('copy-btn').onclick = async () => {
-        const text = finalArea.innerText.trim();
+        // ★ bufferからコピー（interimNodeの文字を含めない）
+        const text = finalBuffer.trim();
         if (!text) { alert('コピーするテキストがありません'); return; }
         try {
             await navigator.clipboard.writeText(text);
@@ -424,7 +421,7 @@
     };
 
     document.getElementById('save-btn').onclick = () => {
-        const text = finalArea.innerText.trim();
+        const text = finalBuffer.trim();
         if (!text) { alert('保存するテキストがありません'); return; }
         const now  = new Date();
         const name = `transcript_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.txt`;
@@ -443,10 +440,15 @@
     };
 
     finalArea.addEventListener('blur', () => {
-        if (finalArea.contentEditable === 'true') editBadge.style.display = 'none';
+        if (finalArea.contentEditable === 'true') {
+            editBadge.style.display = 'none';// ★ 編集内容をbufferに同期
+            finalBuffer = finalArea.textContent;
+        }
     });
     finalArea.addEventListener('focus', () => {
-        if (finalArea.contentEditable === 'true') editBadge.style.display = 'block';
+        if (finalArea.contentEditable === 'true') {
+            editBadge.style.display = 'block';
+        }
     });
 </script>
 </body>
