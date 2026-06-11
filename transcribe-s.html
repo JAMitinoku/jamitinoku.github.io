@@ -58,7 +58,7 @@
             -webkit-user-select: none; user-select: none; transition: all 0.15s;
         }
         .sub-btn:active { background: #1a4a80; transform: scale(0.95); }
-        .sub-btn .icon  { font-size: 1.3em; line-height: 1; }
+        .sub-btn .icon{ font-size: 1.3em; line-height: 1; }
         #selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         select {
             padding: 10px 8px; border-radius: 8px;
@@ -66,8 +66,7 @@
             font-size: 0.85em; -webkit-appearance: none; appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23aaa' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
             background-repeat: no-repeat; background-position: right 10px center;
-            padding-right: 28px; min-height: 44px;
-        }
+            padding-right: 28px; min-height: 44px;}
         #main-container {
             flex: 1; display: flex; flex-direction: column;
             padding: 10px; overflow: hidden; min-height: 0;
@@ -82,8 +81,7 @@
             overflow-y: auto; -webkit-overflow-scrolling: touch;
             font-size: 1.05em; line-height: 1.8;
             word-break: break-all; min-height: 0;
-            outline: none; white-space: pre-wrap;
-        }
+            outline: none; white-space: pre-wrap;}
         #final-area[contenteditable="true"] {
             background: #1a1a00; border-color: #f1c40f; caret-color: #f1c40f;
         }
@@ -146,14 +144,14 @@ if (!SpeechRecognition) alert('このブラウザは音声認識に対応して�
    ・もう片方は onend が来たら即start() して待機
    ・activeSlot が onresult を処理する
 ══════════════════════════════════════════ */
-const SLOTS      = [null, null];// slot[0], slot[1]
-letactiveSlot = 0;              // 今onresult を処理するスロット番号
-let   isRecognizing  = false;
-let   finalBuffer    = '';
-let   lastInterim    = '';
-let   interimNode    = null;
-let   retryCount     = 0;
-let   wakeLock       = null;
+const SLOTS     = [null, null]; // slot[0], slot[1]
+letactiveSlot    = 0;        // 今onresult を処理するスロット番号
+let   isRecognizing = false;
+let   finalBuffer   = '';
+let   lastInterim   = '';
+let   interimNode   = null;
+let   retryCount    = 0;
+let   wakeLock      = null;
 
 const finalArea  = document.getElementById('final-area');
 const statusDot  = document.getElementById('status-dot');
@@ -175,13 +173,13 @@ async function releaseWakeLock() {
     if (wakeLock) { try { await wakeLock.release(); } catch(e) {} wakeLock = null; }
 }
 
-/* ── ステータス ── */
+/* ── ステータス── */
 function setStatus(s, detail) {
     const m = {
         idle:{ text: '待機中',cls: ''},
-        recording: { text: '● 録音中',      cls: 'recording' },
-        reconnect: { text: '再接続中…',     cls: 'waiting'   },
-        denied:    { text: '🚫 マイク拒否', cls: ''          },
+        recording: { text: '● 録音中',       cls: 'recording' },
+        reconnect: { text: '再接続中…',      cls: 'waiting'   },
+        denied:    { text: '🚫 マイク拒否',  cls: ''          },
     };
     const r = m[s] || m.idle;
     statusText.textContent = detail ? `${r.text}（${detail}）` : r.text;
@@ -227,12 +225,11 @@ function destroySlot(i) {
     const r = SLOTS[i];
     if (!r) return;
     r.onstart = r.onend = r.onerror = r.onresult = null;
-    try { r.abort(); } catch(e) {}
-    SLOTS[i] = null;
+    try { r.abort(); } catch(e) {}SLOTS[i] = null;
 }
 
 /* ══════════════════════════════════════════
-   ★ スロット i 用のインスタンスを生成・起動
+   ★ スロット i用のインスタンスを生成・起動
 ══════════════════════════════════════════ */
 function launchSlot(i) {
     if (!isRecognizing) return;
@@ -246,7 +243,6 @@ function launchSlot(i) {
     SLOTS[i] = rec;
 
     rec.onstart = () => {
-        //★ このスロットが activeSlot として起動完了
         if (i === activeSlot) {
             retryCount = 0;
             retryEl.textContent = '';
@@ -254,14 +250,12 @@ function launchSlot(i) {
     };
 
     rec.onresult = (event) => {
-        // ★ activeSlot でなければ結果を無視
         if (i !== activeSlot) return;
         let interim = '';
         for (let j = event.resultIndex; j < event.results.length; j++) {
             if (event.results[j].isFinal) {
                 appendFinal(event.results[j][0].transcript);
-                lastInterim = '';
-            } else {
+                lastInterim = '';} else {
                 interim += event.results[j][0].transcript;
             }
         }
@@ -269,8 +263,8 @@ function launchSlot(i) {
     };
 
     rec.onerror = (e) => {
-|         if (e.error === 'no-speech' || e.error === 'aborted') return; |
-|         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { |
+        if (e.error === 'no-speech' || e.error === 'aborted') return;
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
             setStatus('denied'); forceStop(); return;
         }
         if (i === activeSlot) setStatus('reconnect', e.error);
@@ -280,30 +274,25 @@ function launchSlot(i) {
         if (!isRecognizing) { onStopped(); return; }
 
         if (i === activeSlot) {
-            // ★ active スロットが落ちた
             salvageInterim();
             removeInterimNode();
             retryCount++;
             retryEl.textContent = retryCount > 1 ? `再接続${retryCount}回` : '';
 
-            // 待機中の相手スロットに切り替え
             const other = 1 - i;
             if (SLOTS[other]) {
-                // 相手がすでに起動済み → そちらを active に昇格
                 activeSlot = other;
                 setStatus('recording');
-                // 自分スロットを再起動して待機側に回す
                 setTimeout(() => launchSlot(i), 0);
             } else {
-                // 相手もいない（両方落ちた）→ 直接再起動
                 setStatus('reconnect');
                 setTimeout(() => {
                     activeSlot = i;
-                    launchSlot(i);launchSlot(1 - i);
+                    launchSlot(i);
+                    launchSlot(1 - i);
                 }, 0);
             }
         } else {
-            // 待機スロットが落ちた → 再起動して待機に戻す
             setTimeout(() => launchSlot(i), 0);
         }
     };
@@ -320,8 +309,8 @@ function launchSlot(i) {
 /* ── 全スロット起動 ── */
 function startAll() {
     activeSlot = 0;
-    launchSlot(0);          // active
-    setTimeout(() => launchSlot(1), 500); // 待機（少し遅らせてAPIの衝突を避ける）
+    launchSlot(0);
+    setTimeout(() => launchSlot(1), 500);
 }
 
 /* ── 強制停止 ── */
@@ -365,7 +354,6 @@ stopBtn.onclick = () => {
     if (!isRecognizing) return;
     isRecognizing = false;
     salvageInterim();
-    // onend 誤再起動防止のため onend を先に null に
     [0, 1].forEach(i => {
         if (SLOTS[i]) SLOTS[i].onend = null;
     });
